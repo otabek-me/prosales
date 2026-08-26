@@ -1,0 +1,12 @@
+node_modules
+.next
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.env.local
+.git
+.gitignore
+*.db
+*.sqlite3
