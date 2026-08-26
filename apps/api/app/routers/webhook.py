@@ -203,40 +203,55 @@ async def telegram_webhook(
         return {"status": "operator_mode_active"}
 
     # =======================================================
-    # 4. KETMA-KETLIK (FSM) - BUYURTMA FORMASI
+    # 4. QAT'IY KETMA-KETLIK (FSM) — ISMI, FAMILIYASI ALOHIDA
     # =======================================================
     current_stage = str(customer.stage)
     
+    # Qadam 1: Soni so'ralmoqda
     if current_stage == "ask_quantity":
         if text_content.isdigit():
             customer.draft_quantity = int(text_content)
             customer.stage = "ask_name"
             await db.commit()
-            await send_telegram_message(plain_bot_token, chat_id, "✍️ Ajoyib! Endi ismingizni yozing:")
+            await send_telegram_message(plain_bot_token, chat_id, "1️⃣ Iltimos, **ismingizni** kiriting:")
         else:
-            await send_telegram_message(plain_bot_token, chat_id, "❗️ Iltimos, faqat raqam kiriting. Nechta kerak? (masalan: 1, 2)")
+            await send_telegram_message(plain_bot_token, chat_id, "❗️ Faqat raqam kiriting. Nechta kerak? (masalan: 1, 2)")
         return {"status": "fsm_quantity"}
 
+    # Qadam 2: Ism so'ralmoqda
     elif current_stage == "ask_name":
         if len(text_content) > 1:
             customer.draft_name = text_content
-            customer.stage = "ask_phone"
+            customer.stage = "ask_surname"
             await db.commit()
-            await send_telegram_message(plain_bot_token, chat_id, f"Rahmat, {text_content}! \n📞 Endi telefon raqamingizni yuboring (masalan: +998901234567):")
+            await send_telegram_message(plain_bot_token, chat_id, f"Rahmat, {text_content}!\n\n2️⃣ Endi **familiyangizni** kiriting:")
         else:
             await send_telegram_message(plain_bot_token, chat_id, "❗️ Ismingizni to'g'ri kiriting:")
         return {"status": "fsm_name"}
 
+    # Qadam 3: Familiya so'ralmoqda (YANGI QADAM)
+    elif current_stage == "ask_surname":
+        if len(text_content) > 1:
+            customer.draft_surname = text_content
+            customer.stage = "ask_phone"
+            await db.commit()
+            await send_telegram_message(plain_bot_token, chat_id, "3️⃣ Ajoyib! Endi **telefon raqamingizni** yuboring (masalan: +998901234567):")
+        else:
+            await send_telegram_message(plain_bot_token, chat_id, "❗️ Familiyangizni to'g'ri kiriting:")
+        return {"status": "fsm_surname"}
+
+    # Qadam 4: Telefon raqam so'ralmoqda
     elif current_stage == "ask_phone":
         if re.search(r'^\+?[0-9]{9,15}$', text_content.replace(" ", "")):
             customer.draft_phone = text_content
             customer.stage = "ask_address"
             await db.commit()
-            await send_telegram_message(plain_bot_token, chat_id, "📍 Zo'r! Endi yetkazib berish manzilini to'liq yozing (Viloyat, tuman, ko'cha, uy):")
+            await send_telegram_message(plain_bot_token, chat_id, "4️⃣ Zo'r! Endi yetkazib berish **manzilingizni** to'liq yozing (Viloyat, tuman, ko'cha, uy):")
         else:
             await send_telegram_message(plain_bot_token, chat_id, "❗️ Telefon raqam xato. Iltimos, to'g'ri raqam kiriting (masalan: +998901234567):")
         return {"status": "fsm_phone"}
 
+    # Qadam 5: Manzil so'ralmoqda
     elif current_stage == "ask_address":
         if len(text_content) > 3:
             customer.draft_address = text_content
@@ -246,12 +261,13 @@ async def telegram_webhook(
             product = getattr(customer, "draft_product", "Mahsulot")
             qty = getattr(customer, "draft_quantity", 1)
             name = getattr(customer, "draft_name", "")
+            surname = getattr(customer, "draft_surname", "")
             phone = getattr(customer, "draft_phone", "")
             
             conf_text = (
                 "📄 **Buyurtmangizni tasdiqlaysizmi?**\n\n"
                 f"📦 Mahsulot: {product} ({qty} dona)\n"
-                f"👤 Ism: {name}\n"
+                f"👤 Ism va Familiya: {name} {surname}\n"
                 f"📞 Telefon: {phone}\n"
                 f"📍 Manzil: {text_content}\n\n"
                 "Tasdiqlash uchun *Ha* deb yozing, bekor qilish uchun *Yoq*."
@@ -261,6 +277,7 @@ async def telegram_webhook(
             await send_telegram_message(plain_bot_token, chat_id, "❗️ Manzil juda qisqa. Iltimos, to'liqroq yozing:")
         return {"status": "fsm_address"}
 
+    # Qadam 6: Tasdiqlash
     elif current_stage == "confirmation":
         if text_lower in ["ha", "tasdiqlayman", "ok", "yes"]:
             customer.stage = CustomerStageEnum.NEW 
@@ -275,11 +292,8 @@ async def telegram_webhook(
     # =======================================================
     # 5. AI ENGINE GA YUBORISHDAN OLDIN "KUTING" XABARI
     # =======================================================
-    # KUTTIRIB QO'YMASLIK UCHUN QO'SHILDI:
     if text_lower in ["/products", "👟 mahsulotlar"]:
-        # 1. Darhol kutish xabarini yuboramiz
         await send_telegram_message(plain_bot_token, chat_id, "🔍 *Katalogdan ma'lumotlar yuklanmoqda, iltimos biroz kuting...* ⏳")
-        # 2. AI mahsulotlarni topib berishi uchun mijozning gapini aniq qilib o'zgartiramiz:
         text_content = "Iltimos, bazada mavjud bo'lgan barcha mahsulotlarni ro'yxatini chiroyli qilib taqdim eting."
     
     # =======================================================
@@ -289,16 +303,16 @@ async def telegram_webhook(
         db, organization, customer, conversation, text_content
     )
 
-    # Buyurtma boshlanishini ushlash
+    # Buyurtma boshlanishini ushlash (AI faqat mahsulot nomini aniqlaydi, qolganini FSM boshqaradi)
     order_match = re.search(r'\[ORDER:(.*?)\]', ai_reply_text)
     if order_match:
         product_name = order_match.group(1).strip()
         customer.draft_product = product_name
-        customer.stage = "ask_quantity"
+        customer.stage = "ask_quantity"  # FSM jarayonini boshlaymiz
         await db.commit()
 
-        ai_reply_text = re.sub(r'\[ORDER:.*?\]', '', ai_reply_text).strip()
-        final_text = f"{ai_reply_text}\n\n🔢 Iltimos, nechta **{product_name}** kerakligini yozing (faqat raqam, masalan: 1, 2):"
+        # AIning boshqa ortiqcha gaplarini tashlab yuboramiz va faqat aniq savolni beramiz
+        final_text = f"✅ **{product_name}** tanlandi.\n\n🔢 Iltimos, nechta kerakligini yozing (faqat raqam, masalan: 1, 2):"
         
         ai_msg = Message(
             conversation_id=conversation.id,
