@@ -19,6 +19,38 @@ from app.ai.engine import ai_engine
 logger = logging.getLogger("telegram_webhook")
 router = APIRouter(prefix="/webhook", tags=["Telegram Webhook"])
 
+# ==========================================
+# ASOSIY MENYU TUGMALARI (REPLY KEYBOARD)
+# ==========================================
+MAIN_KEYBOARD = {
+    "keyboard": [
+        [{"text": "👟 Mahsulotlar"}, {"text": "📦 Buyurtmalarim"}],
+        [{"text": "👨‍💼 Operatorga ulanish"}, {"text": "❓ Yordam / FAQ"}]
+    ],
+    "resize_keyboard": True
+}
+
+# ==========================================
+# XABAR YUBORISH UCHUN YORDAMCHI FUNKSIYA
+# ==========================================
+async def send_telegram_message(bot_token: str, chat_id: str, text: str, reply_markup: dict = None):
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown"
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.post(url, json=payload)
+            if res.status_code != 200:
+                logger.error(f"Telegram API xatosi: {res.text}")
+        except Exception as e:
+            logger.error(f"Telegramga xabar yuborishda xatolik: {e}")
+
 @router.post("/telegram/auto")
 @router.post("/telegram/{org_id}")
 async def telegram_webhook(
@@ -29,7 +61,7 @@ async def telegram_webhook(
     update = await request.json()
     logger.info(f"Received Telegram Update (org={org_id}): {update}")
 
-    # Process message object
+    # Xabarni olish
     message_data = update.get("message") or update.get("edited_message")
     if not message_data:
         return {"status": "ignored"}
@@ -40,10 +72,10 @@ async def telegram_webhook(
     if not text_content:
         return {"status": "no_text"}
 
+    # Tashkilotni aniqlash
     organization = None
     bot_obj = None
 
-    # Resolve organization by org_id if provided
     if org_id and org_id != "auto":
         try:
             target_uuid = UUID(org_id)
@@ -55,7 +87,6 @@ async def telegram_webhook(
         except Exception:
             pass
 
-    # If organization not found yet, pick the first active organization that has a bot or any active org
     if not organization:
         bot_res = await db.execute(select(TelegramBot).limit(1))
         bot_obj = bot_res.scalars().first()
@@ -72,7 +103,18 @@ async def telegram_webhook(
 
     resolved_org_id = organization.id
 
-    # 1. Find or create Customer
+    # Bot tokenini olish (Javob yuborish uchun zudlik bilan kerak)
+    plain_bot_token = None
+    if bot_obj and bot_obj.bot_token_encrypted:
+        plain_bot_token = decrypt_token(bot_obj.bot_token_encrypted)
+    elif settings.BOT_TOKEN:
+        plain_bot_token = settings.BOT_TOKEN
+
+    if not plain_bot_token:
+        logger.error("Bot token topilmadi!")
+        return {"status": "no_bot_token"}
+
+    # 1. Mijozni topish yoki yaratish
     tg_user = message_data.get("from", {})
     cust_res = await db.execute(
         select(Customer).where(
@@ -93,7 +135,7 @@ async def telegram_webhook(
         db.add(customer)
         await db.flush()
 
-    # 2. Find or create Conversation
+    # 2. Suhbatni (Conversation) topish yoki yaratish
     conv_res = await db.execute(
         select(Conversation).where(
             Conversation.organization_id == resolved_org_id,
@@ -110,7 +152,7 @@ async def telegram_webhook(
         db.add(conversation)
         await db.flush()
 
-    # 3. Store Customer Message
+    # 3. Mijoz xabarini bazaga saqlash
     now = datetime.utcnow()
     cust_msg = Message(
         conversation_id=conversation.id,
@@ -124,16 +166,71 @@ async def telegram_webhook(
         conversation.unread_count += 1
     await db.commit()
 
-    # If conversation is currently assigned to human operator, do not auto-reply with AI
+    # =======================================================
+    # 4. TUGMALAR VA BUYRUQLARNI UShLAB QOLISH (INTERCEPTOR)
+    # =======================================================
+    text_lower = text_content.lower()
+
+    if text_lower == "/start":
+        welcome_text = (
+            f"Assalomu alaykum, *{tg_user.get('first_name', 'Mijoz')}*! 👋\n\n"
+            f"Do'konimizning rasmiy *AI Sales yordamchisiga* xush kelibsiz.\n"
+            f"Men sizga 24/7 rejimda kerakli mahsulotlarni topish va buyurtma berishga yordam beraman.\n\n"
+            f"Savolingiz bo'lsa darhol yozing yoki pastdagi tugmalardan foydalaning!"
+        )
+        await send_telegram_message(plain_bot_token, chat_id, welcome_text, MAIN_KEYBOARD)
+        return {"status": "handled_start"}
+
+    elif text_lower in ["/products", "👟 mahsulotlar"]:
+        products_text = (
+            "🔥 *Katalogimizdagi mahsulotlar:*\n\n"
+            "Iltimos, menga aynan nima qidirayotganingizni yozing (masalan: Krossovka, futbolka).\n"
+            "AI yordamchimiz sizga bazadagi eng yaxshi variantlarni topib beradi!"
+        )
+        await send_telegram_message(plain_bot_token, chat_id, products_text, MAIN_KEYBOARD)
+        return {"status": "handled_products"}
+
+    elif text_lower in ["/operator", "👨‍💼 operatorga ulanish"]:
+        conversation.is_operator_mode = True
+        await db.commit()
+        op_text = (
+            "👨‍💼 Sizning so'rovingiz bo'yicha jonli operatorimizga xabar berildi.\n"
+            "Tez orada operator suhbatga qo'shiladi va savollaringizga javob beradi."
+        )
+        await send_telegram_message(plain_bot_token, chat_id, op_text, MAIN_KEYBOARD)
+        return {"status": "handled_operator"}
+
+    elif text_lower in ["/help", "❓ yordam / faq"]:
+        faq_text = (
+            "❓ *Ko'p beriladigan savollar:*\n\n"
+            "🚚 *Yetkazib berish:* Toshkent shahri bo'ylab 30,000 so'm (1-2 kun ichida).\n"
+            "💳 *To'lov turlari:* Naqd pul, Click va Payme.\n"
+            "🔄 *Qaytarish:* 14 kun ichida almashtirib beriladi.\n\n"
+            "Har qanday boshqa savolingizni shunchaki yozib qoldiring!"
+        )
+        await send_telegram_message(plain_bot_token, chat_id, faq_text, MAIN_KEYBOARD)
+        return {"status": "handled_help"}
+
+    elif text_lower == "📦 buyurtmalarim":
+        orders_text = (
+            "📦 *Buyurtmalarim*\n\n"
+            "Sizning hozirgi buyurtmalaringizni ko‘rish uchun iltimos, *buyurtma raqamini* shu yerga yozib yuboring."
+        )
+        await send_telegram_message(plain_bot_token, chat_id, orders_text, MAIN_KEYBOARD)
+        return {"status": "handled_orders"}
+
+    # Agar operator rejimi faol bo'lsa, AI ga bormaydi (kod shu yerda to'xtaydi)
     if conversation.is_operator_mode:
         return {"status": "operator_mode_active"}
 
-    # 4. Generate AI Response via AI Sales Engine
+    # =======================================================
+    # 5. AI SALES ENGINE (Qolgan matnlar AI ga ketadi)
+    # =======================================================
     ai_reply_text, tool_calls_made, is_handoff = await ai_engine.generate_response(
         db, organization, customer, conversation, text_content
     )
 
-    # 5. Store AI Message
+    # 6. AI javobini bazaga yozish
     ai_msg = Message(
         conversation_id=conversation.id,
         sender_type=SenderTypeEnum.AI,
@@ -143,24 +240,7 @@ async def telegram_webhook(
     db.add(ai_msg)
     await db.commit()
 
-    # 6. Send AI Reply back to Telegram User
-    try:
-        plain_bot_token = None
-        if bot_obj and bot_obj.bot_token_encrypted:
-            plain_bot_token = decrypt_token(bot_obj.bot_token_encrypted)
-        elif settings.BOT_TOKEN:
-            plain_bot_token = settings.BOT_TOKEN
-
-        if plain_bot_token:
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    f"https://api.telegram.org/bot{plain_bot_token}/sendMessage",
-                    json={
-                        "chat_id": chat_id,
-                        "text": ai_reply_text
-                    }
-                )
-    except Exception as e:
-        logger.error(f"Failed to send Telegram message: {str(e)}")
+    # 7. AI javobini Telegramga yuborish (TUGMALAR bilan birga!)
+    await send_telegram_message(plain_bot_token, chat_id, ai_reply_text, MAIN_KEYBOARD)
 
     return {"status": "success", "handoff": is_handoff}
