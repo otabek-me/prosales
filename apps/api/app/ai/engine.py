@@ -28,14 +28,14 @@ class AISalesEngine:
                 api_key=settings.GROQ_API_KEY,
                 base_url="https://api.groq.com/openai/v1"
             )
-            self.model = "llama-3.3-70b-versatile"
+            self.model = settings.DEFAULT_AI_MODEL
         # 2. If Gemini selected or Gemini API key available
         elif provider == "gemini" and settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
             self.client = AsyncOpenAI(
                 api_key=settings.GEMINI_API_KEY,
                 base_url=settings.OPENAI_BASE_URL or "https://generativelanguage.googleapis.com/v1beta/openai/"
             )
-            self.model = "gemini-1.5-flash"
+            self.model = settings.DEFAULT_AI_MODEL
         # 3. If OpenAI selected or OpenAI key available
         elif provider == "openai" and settings.OPENAI_API_KEY and not settings.OPENAI_API_KEY.startswith("your_"):
             kwargs = {"api_key": settings.OPENAI_API_KEY}
@@ -49,14 +49,13 @@ class AISalesEngine:
                 api_key=settings.GROQ_API_KEY,
                 base_url="https://api.groq.com/openai/v1"
             )
-            self.model = "llama-3.3-70b-versatile"
+            self.model = settings.DEFAULT_AI_MODEL
         elif settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
             self.client = AsyncOpenAI(
                 api_key=settings.GEMINI_API_KEY,
                 base_url=settings.OPENAI_BASE_URL or "https://generativelanguage.googleapis.com/v1beta/openai/"
             )
-            self.model = "gemini-1.5-flash"
-
+            self.model = settings.DEFAULT_AI_MODEL
     async def generate_response(
         self,
         db: AsyncSession,
