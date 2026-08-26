@@ -1,0 +1,62 @@
+ Image ai_sales_saas-api Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 607B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile.api
+#2 transferring dockerfile: 421B 0.0s done
+#2 DONE 0.1s
+
+#3 [internal] load metadata for docker.io/library/python:3.11-slim
+#3 DONE 1.4s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 145B 0.0s done
+#4 DONE 0.1s
+
+#5 [internal] load build context
+#5 transferring context: 3.16kB 0.0s done
+#5 DONE 0.1s
+
+#6 [1/6] FROM docker.io/library/python:3.11-slim@sha256:be1575ed968de893bd54f4c56315ff7c4736ce522c1bca08fd521731aafc0d76
+#6 resolve docker.io/library/python:3.11-slim@sha256:be1575ed968de893bd54f4c56315ff7c4736ce522c1bca08fd521731aafc0d76 0.1s done
+#6 DONE 0.1s
+
+#7 [2/6] WORKDIR /app
+#7 CACHED
+
+#8 [3/6] RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     libpq-dev     curl     && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [4/6] COPY apps/api/requirements.txt .
+#9 CACHED
+
+#10 [5/6] RUN pip install --no-cache-dir -r requirements.txt
+#10 CACHED
+
+#11 [6/6] COPY apps/api /app
+#11 CACHED
+
+#12 exporting to image
+#12 exporting layers 0.0s done
+#12 exporting manifest sha256:480c0f272f7eba2b72268f75bd14d5f88611316a1353f9383499c1c50d29ba99 done
+#12 exporting config sha256:3ecb685f87d799c3946c4a5ac4dee4fa3a79f4ae597452448840723d1c4c3776 done
+#12 exporting attestation manifest sha256:c251119bfb71823fc46caac8f7ee377b767df235c7df76de3f6473421afc2be6
+#12 exporting attestation manifest sha256:c251119bfb71823fc46caac8f7ee377b767df235c7df76de3f6473421afc2be6 0.1s done
+#12 exporting manifest list sha256:6d67d1c310bfd8c217340046657ffa1c57810b3a7e9dfb31ee27f23ad5fd2c0b 0.0s done
+#12 naming to docker.io/library/ai_sales_saas-api:latest
+#12 naming to docker.io/library/ai_sales_saas-api:latest done
+#12 unpacking to docker.io/library/ai_sales_saas-api:latest 0.0s done
+#12 DONE 0.5s
+
+#13 resolving provenance for metadata file
+#13 DONE 0.1s
+ Image ai_sales_saas-api Built 
+ Container ai_sales_db Recreate 
+ Container ai_sales_db Recreated 
+ Container ai_sales_db Starting 
+ Container ai_sales_db Started 
+ Container ai_sales_db Waiting 
+ Container ai_sales_db Healthy 
+ Container ai_sales_api Starting 
+ Container ai_sales_api Started 

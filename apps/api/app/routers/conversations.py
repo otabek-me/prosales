@@ -16,7 +16,7 @@ from app.dependencies import get_current_organization_id
 router = APIRouter(prefix="/conversations", tags=["Live Inbox Conversations"])
 
 class SendOperatorMessageRequest(BaseModel):
-    message: str
+    content: str
 
 class ToggleOperatorModeRequest(BaseModel):
     is_operator_mode: bool
@@ -111,7 +111,7 @@ async def send_operator_message(
     new_msg = Message(
         conversation_id=conv.id,
         sender_type=SenderTypeEnum.OPERATOR,
-        content=data.message,
+        content=data.content,
         created_at=now
     )
     db.add(new_msg)
@@ -127,7 +127,7 @@ async def send_operator_message(
             async with httpx.AsyncClient() as client:
                 await client.post(
                     f"https://api.telegram.org/bot{token}/sendMessage",
-                    json={"chat_id": customer.telegram_id, "text": f"👨‍💼 Operator:\n{data.message}"}
+                    json={"chat_id": customer.telegram_id, "text": f"👨‍💼 Operator:\n{data.content}"}
                 )
         except Exception:
             pass

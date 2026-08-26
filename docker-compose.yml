@@ -37,7 +37,7 @@ services:
       - DEFAULT_AI_MODEL=${DEFAULT_AI_MODEL:-llama-3.3-70b-versatile}
       - TELEGRAM_WEBHOOK_DOMAIN=${TELEGRAM_WEBHOOK_DOMAIN:-http://localhost:8000}
     ports:
-      - "8000:8000"
+      - "8001:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -61,7 +61,7 @@ services:
     container_name: ai_sales_web
     restart: always
     environment:
-      - NEXT_PUBLIC_API_BASE=http://localhost:8000/api/v1
+      - NEXT_PUBLIC_API_BASE=http://localhost:8001/api/v1
     ports:
       - "3000:3000"
     depends_on:
