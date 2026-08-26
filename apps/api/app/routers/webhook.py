@@ -185,10 +185,10 @@ async def telegram_webhook(
         await send_telegram_message(plain_bot_token, chat_id, welcome_text, MAIN_KEYBOARD)
         return {"status": "handled_start"}
 
-    elif text_lower in ["/products", "👟 mahsulotlar"]:
-        products_text = "🔥 *Katalogimizdagi mahsulotlar:*\n\nIltimos, nima qidirayotganingizni yozing."
-        await send_telegram_message(plain_bot_token, chat_id, products_text, MAIN_KEYBOARD)
-        return {"status": "handled_products"}
+    # elif text_lower in ["/products", "👟 mahsulotlar"]:
+    #     products_text = "🔥 *Katalogimizdagi mahsulotlar:*\n\nIltimos, nima qidirayotganingizni yozing."
+    #     await send_telegram_message(plain_bot_token, chat_id, products_text, MAIN_KEYBOARD)
+    #     return {"status": "handled_products"}
 
     elif text_lower in ["/operator", "👨‍💼 operatorga ulanish"]:
         conversation.is_operator_mode = True
