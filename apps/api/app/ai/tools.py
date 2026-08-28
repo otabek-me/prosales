@@ -24,7 +24,7 @@ OPENAI_TOOLS = [
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Mahsulot nomi yoki tavsifi bo'yicha qidiruv so'zi (masalan: 'krossovka', 'sport', 'qora shirt')"
+                        "description": "Mahsulot nomi yoki tavsifi bo'yicha qidiruv so'zi"
                     },
                     "max_price": {
                         "type": "number",
@@ -38,7 +38,7 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_product_details",
-            "description": "Muayyan mahsulotning barcha batafsil ma'lumotlarini (variantlar, o'lchamlar, zaxira va aniq narx) olish.",
+            "description": "Muayyan mahsulotning barcha batafsil ma'lumotlarini olish.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -55,21 +55,21 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "create_order",
-            "description": "Mijoz barcha ma'lumotlarni (mahsulot, razmer/variant, ismi, telefoni, manzili) tasdiqlaganidan so'ng yangi buyurtma yaratish.",
+            "description": "Mijoz barcha ma'lumotlarni tasdiqlaganidan so'ng yangi buyurtma yaratish.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "product_name": {
                         "type": "string",
-                        "description": "Mahsulot nomi (masalan: 'zaryadchik', 'krossovka'). Bu asosiy parametr, product_id bo'lmasa ham shu orqali topiladi."
+                        "description": "Mahsulot nomi (masalan: 'zaryadchik')"
                     },
                     "product_id": {
                         "type": "string",
-                        "description": "Tanlangan mahsulot UUID (ixtiyoriy, agar aniq bilsa)"
+                        "description": "Mahsulot UUID (ixtiyoriy)"
                     },
                     "variant_id": {
                         "type": "string",
-                        "description": "Tanlangan variant/razmer UUID (agar mavjud bo'lsa)"
+                        "description": "Variant/razmer UUID (ixtiyoriy)"
                     },
                     "quantity": {
                         "type": "integer",
@@ -96,7 +96,7 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "handoff_to_operator",
-            "description": "Mijoz jonli inson operator bilan gaplashmoqchi bo'lganda, murakkab savollar berganda yoki shikoyat qilganda suhbatni operatorga o'tkazish.",
+            "description": "Mijoz jonli inson operator bilan gaplashmoqchi bo'lganda suhbatni operatorga o'tkazish.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -110,18 +110,17 @@ OPENAI_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_business_faq",
-            "description": "Biznesning yetkazib berish, to'lov, ish vaqti, qaytarish qoidalari yoki FAQ bo'yicha ma'lumotlarni olish.",
+            "description": "Biznesning yetkazib berish, to'lov, ish vaqti va boshqa qoidalari bo'yicha ma'lumot olish.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Savol yoki mavzu (masalan: 'dostavka', 'tolov', 'kafolat')"}
+                    "query": {"type": "string", "description": "Savol yoki mavzu"}
                 },
                 "required": ["query"]
             }
         }
     }
 ]
-
 # ========== TOOL IJROCHISI ==========
 async def execute_tool_call(
     db: AsyncSession,
