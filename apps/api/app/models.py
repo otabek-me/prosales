@@ -62,7 +62,7 @@ class Organization(Base):
     name = Column(String(255), nullable=False)
     slug = Column(String(255), unique=True, nullable=False, index=True)
     phone = Column(String(50), nullable=True)
-    category = Column(String(100), nullable=True) # e.g. Clothing, Electronics, Food
+    category = Column(String(100), nullable=True)  # e.g. Clothing, Electronics, Food
     logo_url = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -115,7 +115,7 @@ class TelegramBot(Base):
     bot_token_encrypted = Column(Text, nullable=False)
     bot_username = Column(String(255), nullable=True)
     bot_name = Column(String(255), nullable=True)
-    status = Column(String(50), default="CONNECTED", nullable=False) # CONNECTED, DISCONNECTED, ERROR
+    status = Column(String(50), default="CONNECTED", nullable=False)  # CONNECTED, DISCONNECTED, ERROR
     webhook_url = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -134,11 +134,25 @@ class Customer(Base):
     last_name = Column(String(255), nullable=True)
     phone = Column(String(50), nullable=True)
     stage = Column(SQLEnum(CustomerStageEnum), default=CustomerStageEnum.NEW, nullable=False, index=True)
-    language = Column(String(10), default="uz", nullable=False) # uz, ru, en
+    language = Column(String(10), default="uz", nullable=False)  # uz, ru, en
     total_orders = Column(Integer, default=0, nullable=False)
     total_spent = Column(Numeric(12, 2), default=0.00, nullable=False)
     tags = Column(JSONB, default=list, nullable=False)
     notes = Column(Text, nullable=True)
+
+    # --- BUYURTMA FSM (order flow) uchun ustunlar ---
+    # MUHIM: bu maydon `stage` (CustomerStageEnum) dan alohida — chunki `stage`
+    # faqat CRM bosqichlari (NEW/INTERESTED/...) uchun cheklangan enum, unga
+    # "ask_quantity" kabi erkin FSM qiymatlarini yozib bo'lmaydi (bazadan qayta
+    # o'qishda enum konvertatsiyasi buziladi). Shu sabab alohida ustun kerak.
+    order_flow_state = Column(String(50), nullable=True, index=True)
+    draft_product = Column(String(255), nullable=True)
+    draft_quantity = Column(Integer, nullable=True)
+    draft_name = Column(String(255), nullable=True)
+    draft_surname = Column(String(255), nullable=True)
+    draft_phone = Column(String(50), nullable=True)
+    draft_address = Column(Text, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -217,7 +231,7 @@ class ProductVariant(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
-    variant_name = Column(String(255), nullable=False) # e.g. "Size: 42, Color: Black"
+    variant_name = Column(String(255), nullable=False)  # e.g. "Size: 42, Color: Black"
     sku = Column(String(100), nullable=True)
     price_modifier = Column(Numeric(12, 2), default=0.00, nullable=False)
     stock = Column(Integer, default=0, nullable=False)
@@ -297,7 +311,7 @@ class Plan(Base):
     name = Column(String(100), nullable=False)
     slug = Column(String(100), unique=True, nullable=False)
     price_monthly = Column(Numeric(12, 2), nullable=False)
-    limits_json = Column(JSONB, nullable=False) # { "conversations": 500, "products": 50, "operators": 2, "ai_messages": 2000 }
+    limits_json = Column(JSONB, nullable=False)  # { "conversations": 500, "products": 50, "operators": 2, "ai_messages": 2000 }
     features_json = Column(JSONB, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -341,7 +355,7 @@ class AIAnalyticsEvent(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
-    event_type = Column(String(100), nullable=False, index=True) # INTENT_DETECTED, PRODUCT_RECOMMENDED, HANDOFF_TRIGGERED, ORDER_CREATED
+    event_type = Column(String(100), nullable=False, index=True)  # INTENT_DETECTED, PRODUCT_RECOMMENDED, HANDOFF_TRIGGERED, ORDER_CREATED
     payload_json = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
