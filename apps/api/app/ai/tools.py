@@ -10,6 +10,9 @@ from app.models import (
     CustomerStageEnum
 )
 
+# ========== TOOL TA'RIFLARI ==========
+# create_order endi product_name ni asosiy parametr sifatida oladi,
+# product_id ixtiyoriy (fallback) bo'lib qoldi.
 OPENAI_TOOLS = [
     {
         "type": "function",
@@ -56,14 +59,36 @@ OPENAI_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "product_id": {"type": "string", "description": "Tanlangan mahsulot UUID"},
-                    "variant_id": {"type": "string", "description": "Tanlangan variant/razmer UUID (agar mavjud bo'lsa)"},
-                    "quantity": {"type": "integer", "description": "Soni (dona)"},
-                    "customer_name": {"type": "string", "description": "Mijozning to'liq ismi"},
-                    "customer_phone": {"type": "string", "description": "Mijozning telefon raqami"},
-                    "delivery_address": {"type": "string", "description": "Yetkazib berish manzili"}
+                    "product_name": {
+                        "type": "string",
+                        "description": "Mahsulot nomi (masalan: 'zaryadchik', 'krossovka'). Bu asosiy parametr, product_id bo'lmasa ham shu orqali topiladi."
+                    },
+                    "product_id": {
+                        "type": "string",
+                        "description": "Tanlangan mahsulot UUID (ixtiyoriy, agar aniq bilsa)"
+                    },
+                    "variant_id": {
+                        "type": "string",
+                        "description": "Tanlangan variant/razmer UUID (agar mavjud bo'lsa)"
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "description": "Soni (dona)"
+                    },
+                    "customer_name": {
+                        "type": "string",
+                        "description": "Mijozning to'liq ismi"
+                    },
+                    "customer_phone": {
+                        "type": "string",
+                        "description": "Mijozning telefon raqami"
+                    },
+                    "delivery_address": {
+                        "type": "string",
+                        "description": "Yetkazib berish manzili"
+                    }
                 },
-                "required": ["product_id", "customer_name", "customer_phone", "delivery_address"]
+                "required": ["product_name", "customer_name", "customer_phone", "delivery_address"]
             }
         }
     },
@@ -97,6 +122,7 @@ OPENAI_TOOLS = [
     }
 ]
 
+# ========== TOOL IJROCHISI ==========
 async def execute_tool_call(
     db: AsyncSession,
     org_id: UUID,
@@ -106,17 +132,17 @@ async def execute_tool_call(
     arguments: Dict[str, Any]
 ) -> str:
     """Executes a function tool call strictly isolated by organization_id."""
-    
+
     if function_name == "search_products":
-        query_text = arguments.get("query", "").strip()
+        query_text = (arguments.get("query") or "").strip()
         max_price = arguments.get("max_price")
-        
+
         stmt = select(Product).where(
             Product.organization_id == org_id,
             Product.is_active == True,
             Product.stock > 0
         )
-        
+
         if query_text:
             stmt = stmt.where(
                 or_(
@@ -125,15 +151,18 @@ async def execute_tool_call(
                 )
             )
         if max_price:
-            stmt = stmt.where(Product.price <= float(max_price))
-            
+            try:
+                stmt = stmt.where(Product.price <= float(max_price))
+            except (ValueError, TypeError):
+                pass  # noto'g'ri narx formati bo'lsa, e'tiborsiz qoldiramiz
+
         stmt = stmt.limit(5)
         result = await db.execute(stmt)
         products = result.scalars().all()
-        
+
         if not products:
             return json.dumps({"status": "empty", "message": "Mos mahsulotlar topilmadi yoki barchasi sotilib ketgan."})
-            
+
         res_data = []
         for p in products:
             res_data.append({
@@ -142,13 +171,18 @@ async def execute_tool_call(
                 "price": float(p.price),
                 "currency": p.currency,
                 "stock": p.stock,
-                "description": p.description[:120] if p.description else "",
+                "description": (p.description or "")[:120],
                 "image_url": p.image_url
             })
         return json.dumps({"status": "success", "products": res_data}, ensure_ascii=False)
 
     elif function_name == "get_product_details":
-        prod_id = UUID(arguments["product_id"])
+        # Xavfsiz UUID tekshiruvi
+        try:
+            prod_id = UUID(arguments.get("product_id", ""))
+        except (ValueError, TypeError):
+            return json.dumps({"status": "error", "message": "Mahsulot ID noto'g'ri formatda."})
+
         result = await db.execute(
             select(Product).where(Product.id == prod_id, Product.organization_id == org_id)
         )
@@ -179,21 +213,64 @@ async def execute_tool_call(
         }, ensure_ascii=False)
 
     elif function_name == "create_order":
-        prod_id = UUID(arguments["product_id"])
-        variant_id = UUID(arguments["variant_id"]) if arguments.get("variant_id") else None
-        qty = int(arguments.get("quantity", 1))
-        c_name = arguments["customer_name"]
-        c_phone = arguments["customer_phone"]
-        c_addr = arguments["delivery_address"]
+        # --- 1. Mahsulotni topish ---
+        product = None
+        product_id_raw = arguments.get("product_id")
+        product_name_raw = (arguments.get("product_name") or "").strip()
 
-        # Fetch product
-        res = await db.execute(
-            select(Product).where(Product.id == prod_id, Product.organization_id == org_id)
-        )
-        product = res.scalars().first()
-        if not product or product.stock < qty:
+        # Avval product_id orqali qidiramiz (agar to'g'ri UUID bo'lsa)
+        if product_id_raw:
+            try:
+                prod_id = UUID(product_id_raw)
+                res = await db.execute(
+                    select(Product).where(Product.id == prod_id, Product.organization_id == org_id)
+                )
+                product = res.scalars().first()
+            except (ValueError, TypeError):
+                # noto'g'ri UUID bo'lsa, product_name orqali qidirishga o'tamiz
+                product = None
+
+        # Agar product topilmagan bo'lsa va product_name berilgan bo'lsa, nom bo'yicha qidiramiz
+        if not product and product_name_raw:
+            res = await db.execute(
+                select(Product).where(
+                    Product.organization_id == org_id,
+                    Product.is_active == True,
+                    Product.stock > 0,
+                    Product.name.ilike(f"%{product_name_raw}%")
+                ).limit(1)
+            )
+            product = res.scalars().first()
+
+        if not product:
+            return json.dumps({"status": "error", "message": "Mahsulot topilmadi yoki omborda yetarli emas."})
+
+        # --- 2. Boshqa parametrlarni olish ---
+        variant_id = None
+        if arguments.get("variant_id"):
+            try:
+                variant_id = UUID(arguments["variant_id"])
+            except (ValueError, TypeError):
+                variant_id = None
+
+        try:
+            qty = int(arguments.get("quantity", 1))
+        except (ValueError, TypeError):
+            qty = 1
+        if qty < 1:
+            qty = 1
+
+        c_name = (arguments.get("customer_name") or "").strip()
+        c_phone = (arguments.get("customer_phone") or "").strip()
+        c_addr = (arguments.get("delivery_address") or "").strip()
+
+        if not c_name or not c_phone or not c_addr:
+            return json.dumps({"status": "error", "message": "Buyurtma uchun ism, telefon va manzil to'liq kerak."})
+
+        if product.stock < qty:
             return json.dumps({"status": "error", "message": "Mahsulot omborda yetarli emas!"})
 
+        # --- 3. Narxni hisoblash ---
         unit_price = float(product.price)
         if variant_id:
             vr = await db.execute(select(ProductVariant).where(ProductVariant.id == variant_id))
@@ -205,7 +282,7 @@ async def execute_tool_call(
         order_num = f"ORD-{random.randint(100000, 999999)}"
         total_sum = round(unit_price * qty, 2)
 
-        # Create Order
+        # --- 4. Buyurtma yaratish ---
         new_order = Order(
             organization_id=org_id,
             customer_id=customer_id,
@@ -221,7 +298,6 @@ async def execute_tool_call(
         db.add(new_order)
         await db.flush()
 
-        # Add Order Item
         order_item = OrderItem(
             order_id=new_order.id,
             product_id=product.id,
@@ -233,10 +309,10 @@ async def execute_tool_call(
         )
         db.add(order_item)
 
-        # Update product stock
+        # --- 5. Mahsulot zaxirasini yangilash ---
         product.stock -= qty
 
-        # Update customer stage & stats
+        # --- 6. Mijoz ma'lumotlarini yangilash ---
         cust_res = await db.execute(select(Customer).where(Customer.id == customer_id))
         customer = cust_res.scalars().first()
         if customer:
@@ -280,7 +356,7 @@ async def execute_tool_call(
         faqs = res.scalars().all()
         if not faqs:
             return json.dumps({"status": "empty", "message": "Ushbu savol bo'yicha maxsus FAQ topilmadi."})
-        
+
         faq_data = [{"q": f.question, "a": f.answer} for f in faqs]
         return json.dumps({"status": "success", "faqs": faq_data}, ensure_ascii=False)
 

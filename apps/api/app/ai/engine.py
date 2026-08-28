@@ -4,7 +4,7 @@ from uuid import UUID
 from typing import List, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from openai import AsyncOpenAI, BadRequestError
+from openai import AsyncOpenAI
 
 from app.config import settings
 from app.models import (
@@ -14,28 +14,6 @@ from app.models import (
 from app.ai.tools import OPENAI_TOOLS, execute_tool_call
 
 logger = logging.getLogger("ai_sales_engine")
-
-
-def _sanitize_tool_args(fn_args: dict) -> dict:
-    """Modeldan kelgan tool argumentlaridagi `null` qiymatlarni olib tashlaydi.
-
-    Ba'zi providerlar (masalan Groq) argumentni umuman bermasdan qoldirish
-    o'rniga `null` qiymat bilan yuboradi (masalan {"query": null, "max_price": null}).
-    Bizning tool ijrochi funksiyalarimiz (execute_tool_call) parametr yo'qligini
-    kutadi, `null`ni emas — shu sabab bu yerda tozalab beramiz.
-    """
-    if not isinstance(fn_args, dict):
-        return {}
-    return {k: v for k, v in fn_args.items() if v is not None}
-
-
-def _is_tool_schema_error(exc: Exception) -> bool:
-    """Xato modelning tool-chaqiruv argumentlari JSON-schemaga mos kelmaganidan
-    kelib chiqqanmi yoki yo'qmi aniqlaydi (masalan Groq'ning
-    'tool_use_failed' / 'Tool call validation failed' xatosi)."""
-    msg = str(exc).lower()
-    return "tool_use_failed" in msg or "tool call validation failed" in msg
-
 
 class AISalesEngine:
     def __init__(self):
@@ -132,7 +110,6 @@ Ismingiz: {bot_name}
 3. Agar ma'lumot topilmasa yoki noaniq bo'lsa, 'Bu ma'lumotni aniqlashtirish uchun sizni operatorga ulayman' deb ayting.
 4. Yetkazib berish shartlari: {delivery_terms}
 5. To'lov shartlari: {payment_terms}
-6. Mijoz mahsulotlar ro'yxatini so'raganda (masalan "barcha mahsulotlar", "katalog"), `search_products` funksiyasini BO'SH yoki juda keng filtr bilan chaqiring — hech qanday argument bermasdan chaqirish ham mumkin, `null` qiymat YUBORMANG.
 {custom_instructions_str}
 
 === BUYURTMA OLISH FLOW-YI ===
@@ -144,9 +121,11 @@ Mijoz biror mahsulotni sotib olmoqchi bo'lsa, quyidagi tartibda ma'lumotlarni so
 5. Yetkazib berish manzilini so'rang
 6. Barcha ma'lumotlarni jami narx bilan tasdiqlash uchun ko'rsating.
 7. Mijoz tasdiqlagach, `create_order` funksiyasini chaqiring.
+   - Agar mahsulot UUID'sini bilmasangiz, `product_name` parametridan foydalaning (masalan: "zaryadchik").
+   - Hech qachon noto'g'ri yoki xayoliy UUID yubormang.
 
 === MAVJUD TOOL-LAR ===
-Sizda `search_products`, `get_product_details`, `create_order`, `handoff_to_operator`, `get_business_faq` funksiyalari bor. Kerak bo'lganda ushbu funksiyalarni chaqiring. Ixtiyoriy parametrlarni bo'sh qoldiring, `null` qiymat bilan to'ldirmang.
+Sizda `search_products`, `get_product_details`, `create_order`, `handoff_to_operator`, `get_business_faq` funksiyalari bor. Kerak bo'lganda ushbu funksiyalarni chaqiring.
 """
 
         # 3. Load recent chat history (last 10 messages)
@@ -158,10 +137,28 @@ Sizda `search_products`, `get_product_details`, `create_order`, `handoff_to_oper
         )
         recent_messages = list(reversed(msg_res.scalars().all()))
 
+        # --- Tarixni qurish: tool natijalarini ham qo'shamiz ---
         messages_payload = [{"role": "system", "content": system_prompt}]
         for m in recent_messages:
             role = "user" if m.sender_type == SenderTypeEnum.CUSTOMER else "assistant"
             messages_payload.append({"role": role, "content": m.content})
+
+            # Tool natijalarini tiklash (agar mavjud bo'lsa)
+            if m.tool_calls_json:
+                try:
+                    # tool_calls_json JSON string yoki list bo'lishi mumkin
+                    tool_calls = json.loads(m.tool_calls_json) if isinstance(m.tool_calls_json, str) else m.tool_calls_json
+                    if isinstance(tool_calls, list):
+                        for tc in tool_calls:
+                            if isinstance(tc, dict) and tc.get("result"):
+                                # Tool natijasini alohida xabar sifatida qo'shamiz
+                                messages_payload.append({
+                                    "role": "tool",
+                                    "tool_call_id": tc.get("id", "unknown"),
+                                    "content": tc["result"]
+                                })
+                except Exception:
+                    pass  # noto'g'ri JSON bo'lsa, e'tiborsiz qoldiramiz
 
         # Add current user message
         messages_payload.append({"role": "user", "content": user_message_text})
@@ -174,99 +171,77 @@ Sizda `search_products`, `get_product_details`, `create_order`, `handoff_to_oper
         is_handoff = False
 
         try:
-            final_text, tool_calls_executed, is_handoff = await self._run_completion(
-                db, organization, customer, conversation, messages_payload, use_tools=True
+            # 4. First LLM call with Function Calling
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages_payload,
+                tools=OPENAI_TOOLS,
+                tool_choice="auto",
+                temperature=0.4
             )
+
+            assistant_msg = response.choices[0].message
+
+            # Check if AI triggered tool calls
+            if assistant_msg.tool_calls:
+                # Add assistant tool request to conversation
+                messages_payload.append(assistant_msg)
+
+                # --- HAR BIR TOOL CHAQIRUVINI ALOHIDA HIMOYALAYMIZ ---
+                for tool_call in assistant_msg.tool_calls:
+                    fn_name = tool_call.function.name
+                    # Argumentlarni xavfsiz parse qilish
+                    try:
+                        fn_args = json.loads(tool_call.function.arguments or "{}")
+                    except json.JSONDecodeError:
+                        fn_args = {}
+
+                    # Toolni bajarish, xatolik bo'lsa ham umumiy oqim davom etadi
+                    try:
+                        tool_result_str = await execute_tool_call(
+                            db, organization.id, customer.id, conversation.id, fn_name, fn_args
+                        )
+                    except Exception as tool_exc:
+                        logger.error(f"Tool '{fn_name}' bajarilmadi: {str(tool_exc)}", exc_info=True)
+                        tool_result_str = json.dumps({
+                            "status": "error",
+                            "message": "Ichki xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring."
+                        })
+
+                    tool_calls_executed.append({
+                        "name": fn_name,
+                        "args": fn_args,
+                        "result": tool_result_str
+                    })
+
+                    if fn_name == "handoff_to_operator":
+                        is_handoff = True
+
+                    # Tool natijasini xabarlar ro'yxatiga qo'shamiz
+                    messages_payload.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": tool_result_str
+                    })
+
+                # 5. Second LLM call to summarize tool results naturally
+                second_response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages_payload,
+                    temperature=0.5
+                )
+                final_text = second_response.choices[0].message.content
+            else:
+                final_text = assistant_msg.content or "Sizga qanday yordam bera olaman?"
+
+            # Update customer stage dynamically based on conversation
             await self._update_customer_stage(db, customer, user_message_text, final_text)
+
             return final_text, tool_calls_executed, is_handoff
-
-        except BadRequestError as e:
-            # Model noto'g'ri (masalan null) argumentlar bilan tool chaqirmoqchi bo'lganda
-            # Groq/OpenAI 400 qaytaradi. Bu holatda darhol qo'pol fallback'ga tushish
-            # o'rniga, tool'siz (matn-only) javobni qayta so'raymiz — bu ancha tabiiyroq
-            # natija beradi va foydalanuvchi tajribasini buzmaydi.
-            if _is_tool_schema_error(e):
-                logger.warning(f"Tool schema xatosi, tool_choice=none bilan qayta urinilmoqda: {e}")
-                try:
-                    retry_payload = messages_payload  # tool_calls hali qo'shilmagan, xavfsiz
-                    final_text, tool_calls_executed, is_handoff = await self._run_completion(
-                        db, organization, customer, conversation, retry_payload, use_tools=False
-                    )
-                    await self._update_customer_stage(db, customer, user_message_text, final_text)
-                    return final_text, tool_calls_executed, is_handoff
-                except Exception as retry_err:
-                    logger.error(f"tool_choice=none bilan qayta urinish ham muvaffaqiyatsiz: {retry_err}", exc_info=True)
-
-            logger.error(f"Error in AI Sales Engine (BadRequestError): {str(e)}", exc_info=True)
-            return await self._fallback_response(db, organization.id, customer, conversation, user_message_text)
 
         except Exception as e:
             logger.error(f"Error in AI Sales Engine: {str(e)}", exc_info=True)
             return await self._fallback_response(db, organization.id, customer, conversation, user_message_text)
-
-    async def _run_completion(
-        self,
-        db: AsyncSession,
-        organization: Organization,
-        customer: Customer,
-        conversation: Conversation,
-        messages_payload: List[Dict[str, Any]],
-        use_tools: bool = True,
-    ) -> Tuple[str, List[Dict[str, Any]], bool]:
-        """Bitta to'liq LLM turi (kerak bo'lsa tool-chaqiruv bilan)."""
-        tool_calls_executed: List[Dict[str, Any]] = []
-        is_handoff = False
-
-        create_kwargs = dict(
-            model=self.model,
-            messages=messages_payload,
-            temperature=0.4,
-        )
-        if use_tools:
-            create_kwargs["tools"] = OPENAI_TOOLS
-            create_kwargs["tool_choice"] = "auto"
-
-        response = await self.client.chat.completions.create(**create_kwargs)
-        assistant_msg = response.choices[0].message
-
-        if use_tools and assistant_msg.tool_calls:
-            messages_payload = list(messages_payload)
-            messages_payload.append(assistant_msg)
-
-            for tool_call in assistant_msg.tool_calls:
-                fn_name = tool_call.function.name
-                raw_args = json.loads(tool_call.function.arguments or "{}")
-                fn_args = _sanitize_tool_args(raw_args)
-
-                tool_result_str = await execute_tool_call(
-                    db, organization.id, customer.id, conversation.id, fn_name, fn_args
-                )
-
-                tool_calls_executed.append({
-                    "name": fn_name,
-                    "args": fn_args,
-                    "result": tool_result_str
-                })
-
-                if fn_name == "handoff_to_operator":
-                    is_handoff = True
-
-                messages_payload.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": tool_result_str
-                })
-
-            second_response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages_payload,
-                temperature=0.5
-            )
-            final_text = second_response.choices[0].message.content or "Sizga qanday yordam bera olaman?"
-        else:
-            final_text = assistant_msg.content or "Sizga qanday yordam bera olaman?"
-
-        return final_text, tool_calls_executed, is_handoff
 
     async def _fallback_response(
         self,
@@ -293,7 +268,7 @@ Sizda `search_products`, `get_product_details`, `create_order`, `handoff_to_oper
 
         # Delivery or Payment Intent
         if any(w in lower_txt for w in ["dostavka", "yetkazib", "to'lov", "payme", "click", "naqd"]):
-            await execute_tool_call(db, org_id, customer.id, conversation.id, "get_business_faq", {"query": user_message_text})
+            faq_res = await execute_tool_call(db, org_id, customer.id, conversation.id, "get_business_faq", {"query": user_message_text})
             return "Yetkazib berish Toshkent shahri bo'ylab 30,000 so'm (1-2 kun). To'lovni Click, Payme yoki naqd pulda qilishingiz mumkin.", [], False
 
         # Default helpful intro
@@ -307,6 +282,5 @@ Sizda `search_products`, `get_product_details`, `create_order`, `handoff_to_oper
         elif customer.stage == CustomerStageEnum.NEW:
             customer.stage = CustomerStageEnum.INTERESTED
         await db.commit()
-
 
 ai_engine = AISalesEngine()
