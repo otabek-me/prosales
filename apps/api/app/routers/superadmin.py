@@ -1,13 +1,157 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime, timedelta
 
 from app.database import get_db
-from app.models import Organization, User, Order, TelegramBot, OrderStatusEnum
+from app.models import Organization, User, Order, TelegramBot, OrderStatusEnum, Membership, RoleEnum, AISettings, Plan, Subscription, SubscriptionStatusEnum
 from app.schemas import StandardResponse
 from app.dependencies import get_current_user
+from app.config import settings
+from app.security import get_password_hash
 
 router = APIRouter(prefix="/superadmin", tags=["Super Admin Platform"])
+
+# ---- Maxfiy kalitni .env dan oladi (SUPER_ADMIN_SECRET) ----
+SUPER_ADMIN_SECRET = getattr(settings, 'SUPER_ADMIN_SECRET', None) or settings.SECRET_KEY
+
+
+class SetupSuperAdminRequest(BaseModel):
+    email: str
+    secret_key: str
+
+
+class CreateSuperAdminRequest(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    phone: Optional[str] = None
+    secret_key: str
+
+
+@router.post("/setup", response_model=StandardResponse)
+async def setup_superadmin(data: SetupSuperAdminRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Mavjud foydalanuvchini superadmin qilish.
+    Secret key talab qilinadi (.env dagi SECRET_KEY yoki SUPER_ADMIN_SECRET).
+    """
+    if data.secret_key != SUPER_ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Noto'g'ri maxfiy kalit (secret_key)")
+
+    res = await db.execute(select(User).where(User.email == data.email))
+    user = res.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"'{data.email}' emailli foydalanuvchi topilmadi. Avval ro'yxatdan o'ting.")
+
+    user.is_superadmin = True
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data={
+            "message": f"✅ {user.full_name} ({user.email}) muvaffaqiyatli SuperAdmin qilindi!",
+            "user_id": str(user.id),
+            "email": user.email,
+            "full_name": user.full_name
+        }
+    )
+
+
+@router.post("/create", response_model=StandardResponse)
+async def create_superadmin(data: CreateSuperAdminRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Yangi SuperAdmin foydalanuvchi yaratish (ro'yxatdan o'tish + superadmin).
+    Secret key talab qilinadi (.env dagi SECRET_KEY yoki SUPER_ADMIN_SECRET).
+    """
+    if data.secret_key != SUPER_ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Noto'g'ri maxfiy kalit (secret_key)")
+
+    # Check existing
+    res = await db.execute(select(User).where(User.email == data.email))
+    if res.scalars().first():
+        raise HTTPException(status_code=400, detail=f"'{data.email}' emailli foydalanuvchi allaqachon mavjud. /superadmin/setup ni ishlating.")
+
+    import re
+    def slugify(text: str) -> str:
+        text = text.lower().strip()
+        text = re.sub(r'[^\w\s-]', '', text)
+        text = re.sub(r'[\s_-]+', '-', text)
+        return text or "org"
+
+    # Create SuperAdmin User
+    new_user = User(
+        email=data.email,
+        password_hash=get_password_hash(data.password),
+        full_name=data.full_name,
+        phone=data.phone,
+        is_superadmin=True
+    )
+    db.add(new_user)
+    await db.flush()
+
+    # Create Organization
+    import uuid
+    org_name = f"{data.full_name}'s Business"
+    slug = f"{slugify(data.full_name)}-{str(new_user.id)[:6]}"
+
+    new_org = Organization(name=org_name, slug=slug, phone=data.phone)
+    db.add(new_org)
+    await db.flush()
+
+    # Create Membership as OWNER
+    db.add(Membership(
+        organization_id=new_org.id,
+        user_id=new_user.id,
+        role=RoleEnum.OWNER,
+        permissions=["*"]
+    ))
+
+    # Default AI Settings
+    db.add(AISettings(
+        organization_id=new_org.id,
+        bot_name="AI Sotuvchi",
+        personality="Professional, hushmuomala va samimiy sotuvchi"
+    ))
+
+    # Attach Free Trial Plan
+    plan_res = await db.execute(select(Plan).where(Plan.slug == "free-trial"))
+    plan = plan_res.scalars().first()
+    if not plan:
+        plan_res = await db.execute(select(Plan).order_by(Plan.price_monthly.asc()).limit(1))
+        plan = plan_res.scalars().first()
+    if plan:
+        db.add(Subscription(
+            organization_id=new_org.id,
+            plan_id=plan.id,
+            status=SubscriptionStatusEnum.TRIAL,
+            current_period_start=datetime.utcnow(),
+            current_period_end=datetime.utcnow() + timedelta(days=14)
+        ))
+
+    await db.commit()
+
+    # Generate tokens
+    from app.security import create_access_token, create_refresh_token
+    access_token = create_access_token({"sub": str(new_user.id)})
+    refresh_token = create_refresh_token({"sub": str(new_user.id)})
+
+    return StandardResponse(
+        success=True,
+        data={
+            "message": f"✅ SuperAdmin '{data.full_name}' muvaffaqiyatli yaratildi!",
+            "user_id": str(new_user.id),
+            "email": data.email,
+            "organization_id": str(new_org.id),
+            "tokens": {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer"
+            }
+        }
+    )
+
 
 async def verify_superadmin(current_user: User = Depends(get_current_user)):
     if not current_user.is_superadmin:
