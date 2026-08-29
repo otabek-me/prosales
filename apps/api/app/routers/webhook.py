@@ -512,15 +512,70 @@ async def telegram_webhook(
             cust_orders = orders_res.scalars().all()
             if cust_orders:
                 ord_text = "📦 *Sizning so'nggi buyurtmalaringiz:*\n\n"
+                status_labels = {
+                    OrderStatusEnum.PENDING: "⏳ Kutilmoqda",
+                    OrderStatusEnum.CONFIRMED: "✅ Tasdiqlangan",
+                    OrderStatusEnum.PROCESSING: "📦 Tayyorlanmoqda",
+                    OrderStatusEnum.SHIPPED: "🚚 Yo'lda",
+                    OrderStatusEnum.DELIVERED: "🎉 Yetkazildi",
+                    OrderStatusEnum.CANCELLED: "❌ Bekor qilingan"
+                }
                 for o in cust_orders:
-                    status_emoji = "⏳" if o.status == OrderStatusEnum.PENDING else "✅" if o.status == OrderStatusEnum.DELIVERED else "🚚"
-                    ord_text += f"{status_emoji} *Buyurtma #{o.order_number}*\n"
+                    st_label = status_labels.get(o.status, o.status.value)
+                    ord_text += f"{st_label} *Buyurtma #{o.order_number}*\n"
                     ord_text += f"   💰 Summa: *{float(o.total_amount):,.0f} {o.currency}*\n"
-                    ord_text += f"   📊 Status: *{o.status.value}*\n\n"
+                    if o.items:
+                        items_str = ", ".join([f"{it.product_name} ({it.quantity} dona)" for it in o.items])
+                        ord_text += f"   🛍 Mahsulot: _{escape_markdown(items_str[:60])}_\n"
+                    ord_text += "\n"
+                ord_text += "💡 _Buyurtma haqida to'liq ma'lumot olish uchun uning raqamini yozing (masalan: ORD-A13CEA)._"
                 await send_telegram_message(plain_bot_token, chat_id, ord_text, MAIN_KEYBOARD)
             else:
                 await send_telegram_message(plain_bot_token, chat_id, "Sizda hali buyurtmalar mavjud emas. Mahsulot tanlab buyurtma berishingiz mumkin!", MAIN_KEYBOARD)
             return {"status": "handled_orders"}
+
+        # Buyurtma raqamini tekshirish (masalan: ORD-A13CEA yoki ORD12345)
+        ord_match = re.search(r'ORD-?[A-Z0-9]{4,10}', text_content.upper())
+        if ord_match:
+            searched_code = ord_match.group(0).replace("-", "")
+            found_res = await db.execute(
+                select(Order).where(
+                    Order.organization_id == resolved_org_id,
+                    or_(
+                        Order.order_number.ilike(f"%{ord_match.group(0)}%"),
+                        Order.order_number.ilike(f"%{searched_code}%")
+                    )
+                )
+            )
+            found_ord = found_res.scalars().first()
+            if found_ord:
+                status_labels = {
+                    OrderStatusEnum.PENDING: "⏳ Kutilmoqda (operator tez orada tasdiqlaydi)",
+                    OrderStatusEnum.CONFIRMED: "✅ Tasdiqlangan (yetkazishga tayyorlanmoqda)",
+                    OrderStatusEnum.PROCESSING: "📦 Tayyorlanmoqda",
+                    OrderStatusEnum.SHIPPED: "🚚 Yo'lda (kuryer yetkazmoqda)",
+                    OrderStatusEnum.DELIVERED: "🎉 Yetkazib berildi",
+                    OrderStatusEnum.CANCELLED: "❌ Bekor qilingan"
+                }
+                st_str = status_labels.get(found_ord.status, found_ord.status.value)
+                info_msg = (
+                    f"📦 *Buyurtma #{found_ord.order_number} holati:*\n\n"
+                    f"📊 *Status:* {st_str}\n"
+                    f"💰 *Jami summa:* {float(found_ord.total_amount):,.0f} {found_ord.currency}\n"
+                    f"👤 *Xaridor:* {escape_markdown(found_ord.customer_name or 'Mijoz')}\n"
+                    f"📞 *Telefon:* {found_ord.customer_phone or '-'}\n"
+                    f"📍 *Manzil:* {escape_markdown(found_ord.delivery_address or '-')}\n"
+                )
+                if found_ord.items:
+                    info_msg += "\n🛍 *Mahsulotlar:* \n"
+                    for it in found_ord.items:
+                        info_msg += f"▪️ {escape_markdown(it.product_name)} ({it.quantity} dona — {float(it.total):,.0f} UZS)\n"
+                elif found_ord.notes:
+                    info_msg += f"\n📝 *Qayd:* _{escape_markdown(found_ord.notes)}_\n"
+
+                info_msg += "\nQo'shimcha savollaringiz bo'lsa, bemalol so'rashingiz mumkin! 😊"
+                await send_telegram_message(plain_bot_token, chat_id, info_msg, MAIN_KEYBOARD)
+                return {"status": "handled_order_number"}
 
         if text_lower in ["/products", "👟 mahsulotlar"]:
             prod_res = await db.execute(

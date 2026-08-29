@@ -117,6 +117,18 @@ class ProductCreate(BaseModel):
     tags: List[str] = []
     variants: List[ProductVariantCreate] = []
 
+class ProductUpdate(BaseModel):
+    category_id: Optional[UUID] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    sku: Optional[str] = None
+    price: Optional[float] = None
+    currency: Optional[str] = None
+    stock: Optional[int] = None
+    image_url: Optional[str] = None
+    tags: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+
 class ProductResponse(BaseModel):
     id: UUID
     organization_id: UUID

@@ -8,7 +8,7 @@ import re
 from app.database import get_db
 from app.models import Product, ProductCategory, ProductVariant
 from app.schemas import (
-    ProductCreate, ProductResponse, CategoryCreate, CategoryResponse, StandardResponse
+    ProductCreate, ProductUpdate, ProductResponse, CategoryCreate, CategoryResponse, StandardResponse
 )
 from app.dependencies import get_current_organization_id, RequirePermission
 
@@ -19,6 +19,20 @@ def slugify(text: str) -> str:
     text = re.sub(r'[^\w\s-]', '', text)
     text = re.sub(r'[\s_-]+', '-', text)
     return text or "cat"
+
+def generate_default_sku(name: str) -> str:
+    """Mahsulot nomidan avtomatik chiroyli va unikal SKU kod generatsiya qiladi."""
+    import random
+    clean = re.sub(r'[^\w\s]', '', name).strip().upper()
+    parts = clean.split()
+    if not parts:
+        prefix = "PRD"
+    elif len(parts) == 1:
+        prefix = parts[0][:6]
+    else:
+        prefix = "-".join(p[:3] for p in parts[:3])
+    rand_suffix = str(random.randint(1000, 9999))
+    return f"{prefix}-{rand_suffix}"
 
 # --- CATEGORIES ---
 @router.get("/categories", response_model=StandardResponse)
@@ -103,12 +117,30 @@ async def create_product(
     org_id: UUID = Depends(get_current_organization_id),
     db: AsyncSession = Depends(get_db)
 ):
+    # Check subscription product limits
+    from app.models import Subscription, Plan
+    sub_res = await db.execute(select(Subscription).where(Subscription.organization_id == org_id))
+    sub = sub_res.scalars().first()
+    if sub:
+        plan_res = await db.execute(select(Plan).where(Plan.id == sub.plan_id))
+        plan = plan_res.scalars().first()
+        if plan and plan.limits_json and "products" in plan.limits_json:
+            limit = plan.limits_json["products"]
+            curr_prods_cnt = len((await db.execute(select(Product).where(Product.organization_id == org_id, Product.is_active == True))).scalars().all())
+            if curr_prods_cnt >= limit:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Sizning tarifingizda mahsulotlar soni cheklangan ({limit} ta). Ko'proq mahsulot qo'shish uchun tarifingizni yangilang!"
+                )
+
+    sku_final = data.sku.strip() if data.sku and data.sku.strip() else generate_default_sku(data.name)
+
     product = Product(
         organization_id=org_id,
         category_id=data.category_id,
         name=data.name,
         description=data.description,
-        sku=data.sku,
+        sku=sku_final,
         price=data.price,
         currency=data.currency,
         stock=data.stock,
@@ -152,6 +184,45 @@ async def get_product(
 
     return StandardResponse(success=True, data=ProductResponse.model_validate(product))
 
+@router.put("/{product_id}", response_model=StandardResponse, dependencies=[Depends(RequirePermission("products.update"))])
+async def update_product(
+    product_id: UUID,
+    data: ProductUpdate,
+    org_id: UUID = Depends(get_current_organization_id),
+    db: AsyncSession = Depends(get_db)
+):
+    res = await db.execute(
+        select(Product).where(Product.id == product_id, Product.organization_id == org_id)
+    )
+    product = res.scalars().first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+
+    if data.name is not None:
+        product.name = data.name
+    if data.description is not None:
+        product.description = data.description
+    if data.sku is not None:
+        product.sku = data.sku
+    if data.price is not None:
+        product.price = data.price
+    if data.currency is not None:
+        product.currency = data.currency
+    if data.stock is not None:
+        product.stock = data.stock
+    if data.image_url is not None:
+        product.image_url = data.image_url
+    if data.category_id is not None:
+        product.category_id = data.category_id
+    if data.tags is not None:
+        product.tags = data.tags
+    if data.is_active is not None:
+        product.is_active = data.is_active
+
+    await db.commit()
+    await db.refresh(product)
+    return StandardResponse(success=True, data=ProductResponse.model_validate(product))
+
 @router.delete("/{product_id}", response_model=StandardResponse, dependencies=[Depends(RequirePermission("products.delete"))])
 async def delete_product(
     product_id: UUID,
@@ -168,3 +239,4 @@ async def delete_product(
     product.is_active = False
     await db.commit()
     return StandardResponse(success=True, data={"message": "Mahsulot o'chirildi"})
+

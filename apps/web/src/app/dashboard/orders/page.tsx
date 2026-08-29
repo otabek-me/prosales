@@ -142,6 +142,7 @@ export default function OrdersPage() {
               <thead>
                 <tr className="text-left text-xs text-slate-400 bg-slate-900/60 border-b border-slate-800">
                   <th className="p-4 font-semibold">Buyurtma №</th>
+                  <th className="p-4 font-semibold">Mahsulot nomi</th>
                   <th className="p-4 font-semibold">Mijoz ma&apos;lumotlari</th>
                   <th className="p-4 font-semibold">Manzil</th>
                   <th className="p-4 font-semibold">Summa</th>
@@ -151,60 +152,73 @@ export default function OrdersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
-                {filteredOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="p-4 font-mono font-bold text-indigo-300">
-                      {order.order_number}
-                    </td>
-                    <td className="p-4">
-                      <div className="font-semibold text-white flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5 text-slate-400" />
-                        {order.customer_name || 'Noma\'lum'}
-                      </div>
-                      {order.customer_phone && (
-                        <a
-                          href={`tel:${order.customer_phone}`}
-                          className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 mt-0.5"
+                {filteredOrders.map((order) => {
+                  const itemsSummary = order.items && order.items.length > 0
+                    ? order.items.map((it: any) => `${it.product_name} (${it.quantity} dona)`).join(', ')
+                    : (order.notes || "Mahsulot");
+
+                  return (
+                    <tr key={order.id} className="hover:bg-slate-800/30 transition-colors">
+                      <td className="p-4 font-mono font-bold text-indigo-300 whitespace-nowrap">
+                        #{order.order_number}
+                      </td>
+                      <td className="p-4 max-w-xs">
+                        <div className="font-semibold text-white truncate flex items-center gap-1.5" title={itemsSummary}>
+                          <PackageOpen className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                          <span className="truncate">{itemsSummary}</span>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="font-semibold text-white flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-slate-400" />
+                          {order.customer_name || 'Noma\'lum'}
+                        </div>
+                        {order.customer_phone && (
+                          <a
+                            href={`tel:${order.customer_phone}`}
+                            className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 mt-0.5 font-mono"
+                          >
+                            <Phone className="w-3 h-3" />
+                            {order.customer_phone}
+                          </a>
+                        )}
+                      </td>
+                      <td className="p-4 max-w-xs">
+                        <div className="text-xs text-slate-300 flex items-start gap-1">
+                          <MapPin className="w-3.5 h-3.5 text-slate-500 mt-0.5 flex-shrink-0" />
+                          <span className="truncate">{order.delivery_address || '-'}</span>
+                        </div>
+                      </td>
+                      <td className="p-4 font-bold text-emerald-400 whitespace-nowrap">
+                        {Number(order.total_amount || 0).toLocaleString()} UZS
+                      </td>
+                      <td className="p-4">
+                        <select
+                          value={order.status}
+                          onChange={(e) => updateStatus(order.id, e.target.value)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none cursor-pointer transition-all ${statusColors[order.status] || 'bg-slate-800 text-white'}`}
                         >
-                          <Phone className="w-3 h-3" />
-                          {order.customer_phone}
-                        </a>
-                      )}
-                    </td>
-                    <td className="p-4 max-w-xs">
-                      <div className="text-xs text-slate-300 flex items-start gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-slate-500 mt-0.5 flex-shrink-0" />
-                        <span className="truncate">{order.delivery_address || '-'}</span>
-                      </div>
-                    </td>
-                    <td className="p-4 font-bold text-white whitespace-nowrap">
-                      {Number(order.total_amount || 0).toLocaleString()} UZS
-                    </td>
-                    <td className="p-4">
-                      <select
-                        value={order.status}
-                        onChange={(e) => updateStatus(order.id, e.target.value)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold focus:outline-none cursor-pointer transition-all ${statusColors[order.status] || 'bg-slate-800 text-white'}`}
-                      >
-                        {allStatuses.map(s => (
-                          <option key={s} value={s} className="bg-slate-900 text-white">{statusLabels[s]}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="p-4 text-slate-400 text-xs whitespace-nowrap">
-                      {order.created_at ? new Date(order.created_at).toLocaleString('uz', { dateStyle: 'short', timeStyle: 'short' }) : '-'}
-                    </td>
-                    <td className="p-4 text-center">
-                      <button
-                        onClick={() => setSelectedOrder(order)}
-                        className="p-2 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 transition-colors"
-                        title="Batafsil ko'rish"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                          {allStatuses.map(s => (
+                            <option key={s} value={s} className="bg-slate-900 text-white">{statusLabels[s]}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-4 text-slate-400 text-xs whitespace-nowrap">
+                        {order.created_at ? new Date(order.created_at).toLocaleString('uz', { dateStyle: 'short', timeStyle: 'short' }) : '-'}
+                      </td>
+                      <td className="p-4 text-center">
+                        <button
+                          onClick={() => setSelectedOrder(order)}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-xs font-semibold flex items-center justify-center gap-1 border border-indigo-500/30 transition-all mx-auto shadow-sm"
+                          title="Barcha ma'lumotlarni ko'rish"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Ko&apos;rish</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

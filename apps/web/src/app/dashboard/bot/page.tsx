@@ -62,6 +62,27 @@ export default function BotSettingsPage() {
     }
   };
 
+  const [syncingWh, setSyncingWh] = useState(false);
+
+  const handleSyncWebhook = async () => {
+    setSyncingWh(true);
+    setError('');
+    try {
+      const res = await apiPost('/bots/sync-webhook', {});
+      if (res.data?.status === 'CONNECTED') {
+        setSuccess('Webhook muvaffaqiyatli sinxronlandi va Telegramga ulandi!');
+      } else {
+        setError(res.data?.error || 'Webhook o\'rnatishda xatolik yuz berdi.');
+      }
+      setTimeout(() => setSuccess(''), 4000);
+      await loadStatus();
+    } catch (err: any) {
+      setError(err.message || 'Webhookni sinxronlashda xatolik');
+    } finally {
+      setSyncingWh(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -74,26 +95,26 @@ export default function BotSettingsPage() {
     <div className="space-y-6 max-w-2xl">
       <div>
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <Bot className="w-5 h-5 text-indigo-400" /> Telegram Bot Ulash
+          <Bot className="w-5 h-5 text-indigo-400" /> Telegram Bot & Webhook Boshqaruvi
         </h2>
-        <p className="text-xs text-slate-400 mt-1">Telegram botingizni platformaga ulab, AI sotuvchini faollashtiring.</p>
+        <p className="text-xs text-slate-400 mt-1">Telegram botingizni ulang va .env dagi domen orqali avtomatik Webhookni boshqaring.</p>
       </div>
 
       {success && (
         <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4" /> {success}
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> {success}
         </div>
       )}
       {error && (
         <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
-          <AlertCircle className="w-4 h-4" /> {error}
+          <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
         </div>
       )}
 
       {bot ? (
         /* Connected State */
-        <div className="glass-panel p-6 rounded-2xl border border-emerald-500/30">
-          <div className="flex items-center gap-3 mb-4">
+        <div className="glass-panel p-6 rounded-2xl border border-emerald-500/30 shadow-xl space-y-5">
+          <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
               <Bot className="w-6 h-6 text-emerald-400" />
             </div>
@@ -102,57 +123,64 @@ export default function BotSettingsPage() {
               <p className="text-sm text-slate-400">@{bot.bot_username || '-'}</p>
             </div>
             {bot.status === 'WEBHOOK_FAILED' ? (
-              <span className="ml-auto px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs font-semibold flex items-center gap-1">
+              <span className="ml-auto px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs font-semibold flex items-center gap-1 border border-amber-500/30">
                 <AlertCircle className="w-3.5 h-3.5" />
-                WEBHOOK FAILED
+                WEBHOOK XATOSI
               </span>
             ) : (
-              <span className="ml-auto px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-1">
+              <span className="ml-auto px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-1 border border-emerald-500/30">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Ulangan
+                Faol (Ulangan)
               </span>
             )}
           </div>
 
-          <div className="space-y-2 mb-6">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Status</span>
-              <span className="text-white font-medium">{bot.status}</span>
+          {/* Webhook & Server Info Box */}
+          <div className="p-4 bg-slate-900/60 rounded-xl border border-slate-800 space-y-2.5 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">Holati:</span>
+              <span className="text-white font-semibold font-mono">{bot.status}</span>
             </div>
             {bot.webhook_url && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-400">Webhook</span>
-                <span className="text-indigo-400 text-xs truncate max-w-xs">{bot.webhook_url}</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <span className="text-slate-400">O&apos;rnatilgan Webhook URL:</span>
+                <span className="text-indigo-400 font-mono break-all">{bot.webhook_url}</span>
+              </div>
+            )}
+            {bot.webhook_info?.last_error_message && (
+              <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300">
+                <span className="font-semibold">Telegram oxirgi xabari:</span>
+                <span>{bot.webhook_info.last_error_message}</span>
               </div>
             )}
           </div>
 
-          {bot.status === 'WEBHOOK_FAILED' && (
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm mb-6 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              <span>
-                Telegram webhook o'rnatilmadi. Bunga quyidagilar sabab bo'lishi mumkin:
-                bot token noto'g'ri yoki o'chiqilgan, yoki <code className="text-amber-300 bg-black/20 px-1.5 py-0.5 rounded">TELEGRAM_WEBHOOK_DOMAIN</code> ommaviy (public) HTTPS domen emas.
-                Telefram webhook uchun internetda mavjud bo'lgan <b>https://</b> manzil talab qiladi (masalan <code className="text-amber-300 bg-black/20 px-1.5 py-0.5 rounded">https://apimening-domeningiz.com</code>).
-              </span>
-            </div>
-          )}
-
-          <div className="flex gap-3">
+          {/* Action Buttons */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
             <a
               href={`https://t.me/${bot.bot_username}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm text-center transition-all flex items-center justify-center gap-2"
+              className="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs text-center transition-all flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/30"
             >
-              <ExternalLink className="w-4 h-4" /> Telegram da ochish
+              <ExternalLink className="w-3.5 h-3.5" /> Botni ochish
             </a>
+
+            <button
+              onClick={handleSyncWebhook}
+              disabled={syncingWh}
+              className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs transition-all flex items-center justify-center gap-1.5 border border-slate-700 disabled:opacity-50"
+            >
+              {syncingWh ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+              Webhookni yangilash
+            </button>
+
             <button
               onClick={handleDisconnect}
               disabled={disconnecting}
-              className="flex-1 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 font-medium text-sm transition-all flex items-center justify-center gap-2 border border-red-500/20 disabled:opacity-50"
+              className="py-2.5 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 font-medium text-xs transition-all flex items-center justify-center gap-1.5 border border-red-500/20 disabled:opacity-50"
             >
-              {disconnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2Off className="w-4 h-4" />}
+              {disconnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2Off className="w-3.5 h-3.5" />}
               Uzish
             </button>
           </div>

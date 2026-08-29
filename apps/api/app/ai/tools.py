@@ -95,6 +95,22 @@ OPENAI_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_order_status",
+            "description": "Buyurtma raqami (masalan: ORD-A13CEA) bo'yicha buyurtma holati, summasi, yetkazish manzili va statusini tekshirish.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "order_number": {
+                        "type": "string",
+                        "description": "Buyurtma kodi yoki raqami (masalan: 'ORD-A13CEA')"
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "handoff_to_operator",
             "description": "Mijoz jonli inson operator bilan gaplashmoqchi bo'lganda suhbatni operatorga o'tkazish.",
             "parameters": {
@@ -350,6 +366,53 @@ async def execute_tool_call(
             "total_amount": total_sum,
             "currency": product.currency,
             "message": f"Buyurtma #{order_num} muvaffaqiyatli qabul qilindi!"
+        }, ensure_ascii=False)
+
+    elif function_name == "get_order_status":
+        order_num = (arguments.get("order_number") or "").strip()
+        stmt = select(Order).where(Order.organization_id == org_id)
+
+        if order_num:
+            stmt = stmt.where(Order.order_number.ilike(f"%{order_num}%"))
+        else:
+            stmt = stmt.where(Order.customer_id == customer_id)
+
+        stmt = stmt.order_by(Order.created_at.desc()).limit(1)
+        res = await db.execute(stmt)
+        order = res.scalars().first()
+
+        if not order:
+            return json.dumps({
+                "status": "not_found",
+                "message": f"Kechirasiz, '{order_num}' raqamli buyurtma topilmadi."
+            }, ensure_ascii=False)
+
+        status_labels = {
+            "PENDING": "Kutilmoqda (tez orada operator tasdiqlaydi)",
+            "CONFIRMED": "Tasdiqlangan (yetkazishga tayyorlanmoqda)",
+            "PROCESSING": "Tayyorlanmoqda",
+            "SHIPPED": "Yo'lda (kuryer orqali yetkazilmoqda)",
+            "DELIVERED": "Yetkazib berildi",
+            "CANCELLED": "Bekor qilingan"
+        }
+        human_status = status_labels.get(order.status.value, order.status.value)
+
+        items_info = []
+        if order.items:
+            for it in order.items:
+                items_info.append(f"{it.product_name} ({it.quantity} dona)")
+
+        return json.dumps({
+            "status": "found",
+            "order_number": order.order_number,
+            "status": human_status,
+            "customer_name": order.customer_name,
+            "customer_phone": order.customer_phone,
+            "delivery_address": order.delivery_address,
+            "total_amount": float(order.total_amount),
+            "currency": order.currency,
+            "items": ", ".join(items_info) if items_info else order.notes or "Mavjud",
+            "created_at": order.created_at.strftime("%Y-%m-%d %H:%M") if order.created_at else ""
         }, ensure_ascii=False)
 
     elif function_name == "handoff_to_operator":

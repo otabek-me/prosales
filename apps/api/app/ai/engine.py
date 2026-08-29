@@ -105,14 +105,19 @@ Ismingiz: {bot_name}
 5. To'lov shartlari: {payment_terms}
 {custom_instructions_str}
 
-=== BUYURTMA OLISH TARTIBI ===
-Mijoz mahsulotni sotib olmoqchi bo'lsa:
-1. Mahsulot nomi va miqdorini aniqlang.
-2. Mijozning ismi, telefon raqami va yetkazib berish manzilini so'rang.
-3. Ma'lumotlar to'liq bo'lgach, `create_order` funksiyasini chaqiring.
+=== BUYURTMA OLISH VA BUYURTMA STATUSINI TEKSHIRISH TARTIBI ===
+1. Mijoz mahsulotni sotib olmoqchi bo'lsa: mahsulot nomi, miqdori, ismi, telefon raqami va manzilini so'rab, `create_order` funksiyasini chaqiring.
+2. Mijoz o'z buyurtmasining holatini yoki statusini bilmoqchi bo'lsa (masalan, buyurtma kodi ORD-A13CEA kabilarni yozsa), albatta `get_order_status` funksiyasini chaqiring.
+3. Operatorga o'tkazish kerak bo'lsa `handoff_to_operator` funksiyasini chaqiring. Javobingizda hech qanday xom JSON, `reason` yoki schema kodlarini ko'rsatmang! Faqat oddiy tushunarli matn yozing.
 
 === MAVJUD TOOL-LAR ===
-Sizda `search_products`, `get_product_details`, `create_order`, `handoff_to_operator`, `get_business_faq` funksiyalari bor.
+Sizda quyidagi funksiyalar bor:
+- `search_products`: Mahsulotlarni qidirish.
+- `get_product_details`: Mahsulot tafsilotlarini ko'rish.
+- `create_order`: Yangi buyurtma yaratish.
+- `get_order_status`: Buyurtma holatini/statusini tekshirish.
+- `handoff_to_operator`: Operatorga o'tkazish.
+- `get_business_faq`: FAQ ma'lumotlarini olish.
 """
 
         # 3. Load recent clean chat history (last 8 text messages)

@@ -54,6 +54,11 @@ class SubscriptionStatusEnum(str, enum.Enum):
     CANCELLED = "CANCELLED"
     EXPIRED = "EXPIRED"
 
+class PaymentRequestStatusEnum(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
 # Models
 class Organization(Base):
     __tablename__ = "organizations"
@@ -330,6 +335,30 @@ class Subscription(Base):
 
     organization = relationship("Organization", back_populates="subscription")
     plan = relationship("Plan")
+
+
+class PaymentRequest(Base):
+    __tablename__ = "payment_requests"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.id"), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    currency = Column(String(10), default="UZS", nullable=False)
+    card_number = Column(String(50), nullable=True)
+    sender_name = Column(String(255), nullable=True)
+    sender_phone = Column(String(50), nullable=True)
+    receipt_image_url = Column(Text, nullable=True)
+    transaction_id = Column(String(100), nullable=True)
+    status = Column(SQLEnum(PaymentRequestStatusEnum), default=PaymentRequestStatusEnum.PENDING, nullable=False, index=True)
+    admin_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    organization = relationship("Organization")
+    plan = relationship("Plan")
+    user = relationship("User")
 
 
 class AISettings(Base):

@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     BOT_TOKEN: Optional[str] = os.getenv("BOT_TOKEN", "")
     TELEGRAM_WEBHOOK_DOMAIN: str = os.getenv("TELEGRAM_WEBHOOK_DOMAIN", "https://api.yourdomain.com")
     
+    # Bank Card Payment Settings (.env dan olinadi)
+    PAYMENT_CARD_NUMBER: str = os.getenv("PAYMENT_CARD_NUMBER", "9860 3501 2345 6789")
+    PAYMENT_CARD_HOLDER: str = os.getenv("PAYMENT_CARD_HOLDER", "OTABEK R.")
+    PAYMENT_CARD_BANK: str = os.getenv("PAYMENT_CARD_BANK", "Humo / Uzcard")
+    
     class Config:
         case_sensitive = True
         env_file = ".env"

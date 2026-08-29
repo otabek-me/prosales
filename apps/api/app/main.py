@@ -94,10 +94,41 @@ app.include_router(analytics.router, prefix=v1)
 app.include_router(subscriptions.router, prefix=v1)
 app.include_router(superadmin.router, prefix=v1)
 app.include_router(webhook.router, prefix=v1)
+# Also mount webhook at root /webhook for backward compatibility
+app.include_router(webhook.router)
+
 
 @app.on_event("startup")
 async def on_startup():
     logger.info("Initializing database tables...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables initialized.")
+
+    # Avtomatik Webhook Sinxronizatsiyasi (.env dagi TELEGRAM_WEBHOOK_DOMAIN bo'yicha)
+    wh_domain = (settings.TELEGRAM_WEBHOOK_DOMAIN or "").strip().rstrip("/")
+    if wh_domain and wh_domain.startswith("https://"):
+        try:
+            from sqlalchemy import select
+            from app.database import AsyncSessionLocal
+            from app.models import TelegramBot
+            from app.security import decrypt_token
+            from app.routers.bots import setup_telegram_webhook
+
+            async with AsyncSessionLocal() as session:
+                bots_res = await session.execute(select(TelegramBot))
+                all_bots = bots_res.scalars().all()
+                for b in all_bots:
+                    plain_tok = decrypt_token(b.bot_token_encrypted)
+                    if plain_tok:
+                        logger.info(f"Auto-syncing webhook for bot @{b.bot_username} to {wh_domain}...")
+                        res = await setup_telegram_webhook(plain_tok, str(b.organization_id))
+                        if res.get("success"):
+                            b.webhook_url = res["webhook_url"]
+                            b.status = "CONNECTED"
+                            logger.info(f"Bot @{b.bot_username} webhook successfully set to {b.webhook_url}")
+                await session.commit()
+        except Exception as e:
+            logger.warning(f"Startup webhook auto-sync error: {e}")
+
     logger.info("Application startup completed successfully.")
