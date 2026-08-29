@@ -68,6 +68,16 @@ def _clear_draft(customer: Customer) -> None:
     customer.draft_address = None
 
 
+async def send_chat_action(bot_token: str, chat_id: str, action: str = "typing") -> None:
+    """Telegramda 'yozmoqda...' yoki 'izlamoqda...' holatini yoqadi."""
+    url = f"https://api.telegram.org/bot{bot_token}/sendChatAction"
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.post(url, json={"chat_id": chat_id, "action": action})
+    except Exception:
+        pass
+
+
 async def send_telegram_message(bot_token: str, chat_id: str, text: str, reply_markup: dict = None, parse_mode: Optional[str] = "Markdown") -> bool:
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
@@ -84,9 +94,6 @@ async def send_telegram_message(bot_token: str, chat_id: str, text: str, reply_m
             res = await client.post(url, json=payload)
             if res.status_code != 200:
                 logger.error(f"Telegram API xatosi: {res.text}")
-                # Ko'p hollarda xato Markdown belgilarini parse qila olmasligidan
-                # kelib chiqadi. Shu holatda parse_mode'siz qayta yuboramiz —
-                # foydalanuvchi hech bo'lmasa javob oladi.
                 if parse_mode:
                     fallback_payload = dict(payload)
                     fallback_payload.pop("parse_mode", None)
@@ -177,11 +184,11 @@ async def _handle_order_fsm(
             phone = customer.draft_phone or ""
 
             conf_text = (
-                "📄 Buyurtmangizni tasdiqlaysizmi?\n\n"
-                f"📦 Mahsulot: {escape_markdown(product)} ({qty} dona)\n"
-                f"👤 Xaridor: {escape_markdown(name)} {escape_markdown(surname)}\n"
-                f"📞 Telefon: {phone}\n"
-                f"📍 Manzil: {escape_markdown(text_content)}\n\n"
+                "📄 *Buyurtmangizni tasdiqlaysizmi?*\n\n"
+                f"📦 *Mahsulot:* {escape_markdown(product)} ({qty} dona)\n"
+                f"👤 *Xaridor:* {escape_markdown(name)} {escape_markdown(surname)}\n"
+                f"📞 *Telefon:* {phone}\n"
+                f"📍 *Manzil:* {escape_markdown(text_content)}\n\n"
                 "✅ Tasdiqlash uchun *Ha* deb yozing.\n"
                 "❌ Bekor qilish uchun *Yo'q* yoki /cancel deb yozing."
             )
@@ -208,7 +215,7 @@ async def _handle_order_fsm(
                 currency="UZS"
             )
             db.add(new_order)
-            await db.flush()  # ID olish uchun
+            await db.flush()
 
             product_name = customer.draft_product or "Noma'lum mahsulot"
             qty = customer.draft_quantity or 1
@@ -220,7 +227,7 @@ async def _handle_order_fsm(
             product_obj = prod_res.scalars().first()
 
             if product_obj:
-                total_price = product_obj.price * qty
+                total_price = float(product_obj.price) * qty
                 order_item = OrderItem(
                     order_id=new_order.id,
                     product_id=product_obj.id,
@@ -231,17 +238,18 @@ async def _handle_order_fsm(
                 )
                 db.add(order_item)
                 new_order.total_amount = total_price
-                customer.total_spent = (customer.total_spent or 0) + total_price
+                customer.total_spent = float(customer.total_spent or 0) + total_price
             else:
-                new_order.notes = f"AI qabul qilgan mahsulot: {product_name} ({qty} dona). Baza bilan aniq mos kelmadi."
+                new_order.notes = f"AI qabul qilgan mahsulot: {product_name} ({qty} dona)."
 
             customer.total_orders = (customer.total_orders or 0) + 1
             customer.stage = CustomerStageEnum.ORDERED
 
             success_text = (
-                f"🎉 Buyurtmangiz muvaffaqiyatli qabul qilindi!\n\n"
+                f"🎉 *Buyurtmangiz muvaffaqiyatli qabul qilindi!*\n\n"
                 f"🆔 Buyurtma raqami: *{order_num}*\n"
-                "Tez orada operatorlarimiz bog'lanadi."
+                f"💰 Jami summa: *{float(new_order.total_amount):,.0f} UZS*\n\n"
+                "Tez orada operatorlarimiz siz bilan bog'lanishadi. Do'konimizni tanlaganingiz uchun rahmat! 😊"
             )
             await send_telegram_message(bot_token, chat_id, success_text, MAIN_KEYBOARD)
         else:
@@ -257,8 +265,6 @@ async def _handle_order_fsm(
         await db.commit()
         return {"status": "fsm_confirmation_completed"}
 
-    # Noma'lum/singan holat — xavfsizlik uchun jarayonni tozalab qayta boshlaymiz
-    logger.warning(f"Noma'lum order_flow_state: {stage}. Jarayon tozalanmoqda.")
     customer.order_flow_state = None
     _clear_draft(customer)
     await db.commit()
@@ -282,6 +288,106 @@ async def telegram_webhook(
     except Exception:
         return {"status": "invalid_payload"}
 
+    # 1. TASHKILOT VA BOTNI ANIQLASH
+    organization = None
+    bot_obj = None
+
+    if org_id and org_id != "auto":
+        try:
+            target_uuid = UUID(org_id)
+        except ValueError:
+            return {"status": "invalid_org_id"}
+
+        org_res = await db.execute(
+            select(Organization).where(Organization.id == target_uuid, Organization.is_active == True)
+        )
+        organization = org_res.scalars().first()
+        if not organization:
+            return {"status": "org_not_found"}
+
+        bot_res = await db.execute(select(TelegramBot).where(TelegramBot.organization_id == target_uuid))
+        bot_obj = bot_res.scalars().first()
+    else:
+        bot_res = await db.execute(select(TelegramBot).limit(1))
+        bot_obj = bot_res.scalars().first()
+        if bot_obj:
+            org_res = await db.execute(
+                select(Organization).where(Organization.id == bot_obj.organization_id, Organization.is_active == True)
+            )
+            organization = org_res.scalars().first()
+
+    if not organization:
+        return {"status": "org_not_found"}
+
+    resolved_org_id = organization.id
+    plain_bot_token = decrypt_token(bot_obj.bot_token_encrypted) if bot_obj and bot_obj.bot_token_encrypted else settings.BOT_TOKEN
+
+    if not plain_bot_token:
+        return {"status": "no_bot_token"}
+
+    # 2. CALLBACK QUERY (Inline Button Click) ISHLOV BERISH
+    callback_query = update.get("callback_query")
+    if callback_query:
+        cb_chat_id = str(callback_query["message"]["chat"]["id"])
+        cb_data = callback_query.get("data", "")
+        cb_user = callback_query.get("from", {})
+
+        # Find or create customer & conversation
+        cust_res = await db.execute(
+            select(Customer).where(Customer.organization_id == resolved_org_id, Customer.telegram_id == cb_chat_id)
+        )
+        customer = cust_res.scalars().first()
+        if not customer:
+            customer = Customer(
+                organization_id=resolved_org_id,
+                telegram_id=cb_chat_id,
+                username=cb_user.get("username"),
+                first_name=cb_user.get("first_name"),
+                last_name=cb_user.get("last_name"),
+                stage=CustomerStageEnum.NEW
+            )
+            db.add(customer)
+            await db.flush()
+
+        conv_res = await db.execute(
+            select(Conversation).where(Conversation.organization_id == resolved_org_id, Conversation.customer_id == customer.id)
+        )
+        conversation = conv_res.scalars().first()
+        if not conversation:
+            conversation = Conversation(
+                organization_id=resolved_org_id,
+                customer_id=customer.id,
+                is_operator_mode=False
+            )
+            db.add(conversation)
+            await db.flush()
+
+        if cb_data.startswith("buy_"):
+            prod_prefix = cb_data[4:]
+            prod_res = await db.execute(
+                select(Product).where(
+                    Product.organization_id == resolved_org_id,
+                    Product.is_active == True
+                )
+            )
+            all_prods = prod_res.scalars().all()
+            matched_prod = next((p for p in all_prods if str(p.id).startswith(prod_prefix)), None)
+
+            if matched_prod:
+                customer.draft_product = matched_prod.name
+                customer.order_flow_state = STAGE_ASK_QUANTITY
+                customer.stage = CustomerStageEnum.CONSIDERING
+                await db.commit()
+
+                ask_text = (
+                    f"✅ *{escape_markdown(matched_prod.name)}* tanlandi.\n"
+                    f"💰 Narxi: *{float(matched_prod.price):,.0f} {matched_prod.currency}*\n\n"
+                    "🔢 *Nechta dona buyurtma qilmoqchisiz?* (masalan: 1, 2):"
+                )
+                await send_telegram_message(plain_bot_token, cb_chat_id, ask_text, MAIN_KEYBOARD)
+                return {"status": "handled_inline_buy"}
+
+    # 3. ODDIY XABARLARNI QABUL QILISH
     message_data = update.get("message") or update.get("edited_message")
     if not message_data:
         return {"status": "ignored"}
@@ -293,49 +399,9 @@ async def telegram_webhook(
         return {"status": "no_text"}
 
     try:
-        # 1. TASHKILOT VA BOTNI ANIQLASH
-        # MUHIM: agar org_id aniq berilgan bo'lsa va topilmasa, boshqa
-        # tashkilotga "jimgina" o'tib ketmaymiz (multi-tenant xavfsizligi).
-        organization = None
-        bot_obj = None
+        # Trigger live typing action immediately
+        await send_chat_action(plain_bot_token, chat_id, "typing")
 
-        if org_id and org_id != "auto":
-            try:
-                target_uuid = UUID(org_id)
-            except ValueError:
-                logger.warning(f"Noto'g'ri org_id formati: {org_id}")
-                return {"status": "invalid_org_id"}
-
-            org_res = await db.execute(
-                select(Organization).where(Organization.id == target_uuid, Organization.is_active == True)
-            )
-            organization = org_res.scalars().first()
-            if not organization:
-                logger.warning(f"Tashkilot topilmadi yoki faol emas: {org_id}")
-                return {"status": "org_not_found"}
-
-            bot_res = await db.execute(select(TelegramBot).where(TelegramBot.organization_id == target_uuid))
-            bot_obj = bot_res.scalars().first()
-        else:
-            # "auto" rejimi — faqat bitta bot ulangan tizimlar uchun (dev/test)
-            bot_res = await db.execute(select(TelegramBot).limit(1))
-            bot_obj = bot_res.scalars().first()
-            if bot_obj:
-                org_res = await db.execute(
-                    select(Organization).where(Organization.id == bot_obj.organization_id, Organization.is_active == True)
-                )
-                organization = org_res.scalars().first()
-
-        if not organization:
-            return {"status": "org_not_found"}
-
-        resolved_org_id = organization.id
-        plain_bot_token = decrypt_token(bot_obj.bot_token_encrypted) if bot_obj and bot_obj.bot_token_encrypted else settings.BOT_TOKEN
-
-        if not plain_bot_token:
-            return {"status": "no_bot_token"}
-
-        # 2. MIJOZ VA SUHBATNI TOPISH YOKI YARATISH
         tg_user = message_data.get("from", {})
         cust_res = await db.execute(
             select(Customer).where(Customer.organization_id == resolved_org_id, Customer.telegram_id == chat_id)
@@ -377,13 +443,12 @@ async def telegram_webhook(
         )
         db.add(cust_msg)
         conversation.last_message_at = now
-        if conversation.is_operator_mode:
-            conversation.unread_count += 1
+        conversation.unread_count += 1
         await db.commit()
 
         text_lower = text_content.lower()
 
-        # 3. UNIVERSAL BUYRUQLAR — har doim, hatto FSM/operator rejimida ham ishlaydi
+        # 4. UNIVERSAL BUYRUQLAR
         if text_lower == "/start":
             customer.stage = CustomerStageEnum.NEW
             customer.order_flow_state = None
@@ -391,9 +456,9 @@ async def telegram_webhook(
             await db.commit()
             welcome_text = (
                 f"Assalomu alaykum, *{escape_markdown(tg_user.get('first_name', 'Mijoz'))}*! 👋\n\n"
-                "Do'konimizning rasmiy *AI yordamchisiga* xush kelibsiz.\n"
+                f"*{escape_markdown(organization.name)}* rasmiy AI yordamchisiga xush kelibsiz.\n"
                 "Sizga kerakli mahsulotni topish va buyurtma berishga yordam beraman.\n\n"
-                "Nima qidirayotganingizni yozing yoki tugmalardan foydalaning!"
+                "Quyidagi tugmalardan foydalaning yoki xohlagan savolingizni yozing!"
             )
             await send_telegram_message(plain_bot_token, chat_id, welcome_text, MAIN_KEYBOARD)
             return {"status": "handled_start"}
@@ -407,41 +472,97 @@ async def telegram_webhook(
 
         if text_lower in ["/operator", "👨‍💼 operatorga ulanish"]:
             conversation.is_operator_mode = True
+            conversation.unread_count += 1
             customer.order_flow_state = None
             _clear_draft(customer)
             await db.commit()
-            await send_telegram_message(plain_bot_token, chat_id, "👨‍💼 Operatorga xabar berildi. Tez orada siz bilan bog'lanadi.", MAIN_KEYBOARD)
+            await send_telegram_message(
+                plain_bot_token, chat_id,
+                "👨‍💼 *Operatorimizga xabar berildi!*\n\nOperatorimiz tez orada siz bilan bog'lanadi. Ungacha savollaringizni yozib qoldirishingiz mumkin.",
+                MAIN_KEYBOARD
+            )
             return {"status": "handled_operator"}
 
-        if conversation.is_operator_mode:
-            return {"status": "operator_mode_active"}
-
-        # 4. FAOL BUYURTMA JARAYONI — MENYU TUGMALARIDAN OLDIN ISHLAYDI
-        # (aks holda foydalanuvchi ism/manzil yozayotganda tasodifan menyu
-        # buyrug'iga o'xshab qolsa, jarayon uzilib qolardi)
+        # 5. FAOL BUYURTMA JARAYONI (FSM)
         if customer.order_flow_state:
             return await _handle_order_fsm(
                 db, plain_bot_token, chat_id, resolved_org_id, customer, conversation, text_content, text_lower
             )
 
-        # 5. ASOSIY MENYU BUYRUQLARI
+        # 6. ASOSIY MENYU BUYRUQLARI
         if text_lower in ["/help", "❓ yordam / faq"]:
-            faq_text = "❓ *Yordam:*\n\n🚚 Yetkazib berish: 1-2 kun\n💳 To'lov: Naqd, Click, Payme orqali.\nQo'shimcha savollar uchun operatorga ulanishingiz mumkin."
+            faq_text = (
+                "❓ *Tez-tez beriladigan savollar:*\n\n"
+                "🚚 *Yetkazib berish:* Toshkent bo'ylab 30,000 so'm (1-2 kun), viloyatlarga 40,000 so'm.\n"
+                "💳 *To'lov turlari:* Naqd pul, Click, Payme orqali.\n"
+                "🔄 *Kafolat & Qaytarish:* 14 kun ichida almashtirib beriladi.\n\n"
+                "Operator bilan bog'lanish uchun *👨‍💼 Operatorga ulanish* tugmasini bosing."
+            )
             await send_telegram_message(plain_bot_token, chat_id, faq_text, MAIN_KEYBOARD)
             return {"status": "handled_help"}
 
         if text_lower == "📦 buyurtmalarim":
-            await send_telegram_message(plain_bot_token, chat_id, "📦 Buyurtma raqamini yozing.", MAIN_KEYBOARD)
+            # Show customer's recent orders
+            orders_res = await db.execute(
+                select(Order).where(
+                    Order.organization_id == resolved_org_id,
+                    Order.customer_id == customer.id
+                ).order_by(Order.created_at.desc()).limit(5)
+            )
+            cust_orders = orders_res.scalars().all()
+            if cust_orders:
+                ord_text = "📦 *Sizning so'nggi buyurtmalaringiz:*\n\n"
+                for o in cust_orders:
+                    status_emoji = "⏳" if o.status == OrderStatusEnum.PENDING else "✅" if o.status == OrderStatusEnum.DELIVERED else "🚚"
+                    ord_text += f"{status_emoji} *Buyurtma #{o.order_number}*\n"
+                    ord_text += f"   💰 Summa: *{float(o.total_amount):,.0f} {o.currency}*\n"
+                    ord_text += f"   📊 Status: *{o.status.value}*\n\n"
+                await send_telegram_message(plain_bot_token, chat_id, ord_text, MAIN_KEYBOARD)
+            else:
+                await send_telegram_message(plain_bot_token, chat_id, "Sizda hali buyurtmalar mavjud emas. Mahsulot tanlab buyurtma berishingiz mumkin!", MAIN_KEYBOARD)
             return {"status": "handled_orders"}
 
         if text_lower in ["/products", "👟 mahsulotlar"]:
-            await send_telegram_message(plain_bot_token, chat_id, "🔍 *Katalogdan ma'lumotlar yuklanmoqda, iltimos biroz kuting...* ⏳")
-            text_content = "Iltimos, bazada mavjud bo'lgan barcha mahsulotlarni ro'yxatini chiroyli qilib taqdim eting."
+            prod_res = await db.execute(
+                select(Product).where(
+                    Product.organization_id == resolved_org_id,
+                    Product.is_active == True,
+                    Product.stock > 0
+                ).order_by(Product.created_at.desc()).limit(8)
+            )
+            products = prod_res.scalars().all()
+            if products:
+                catalog_text = "👟 *Do'konimizdagi mahsulotlar katalogi:*\n\n"
+                inline_buttons = []
+                for p in products:
+                    catalog_text += f"▪️ *{escape_markdown(p.name)}*\n"
+                    catalog_text += f"   💰 Narxi: *{float(p.price):,.0f} {p.currency}*\n"
+                    if p.description:
+                        catalog_text += f"   📝 _{escape_markdown(p.description[:70])}_\n"
+                    catalog_text += "\n"
+                    inline_buttons.append([{"text": f"🛒 {p.name[:25]} — Buyurtma", "callback_data": f"buy_{str(p.id)[:8]}"}])
 
-        # 6. AI SALES ENGINE ULANISHI
+                catalog_text += "💡 _Buyurtma qilish uchun mahsulot tugmasini bosing yoki nomini yozing._"
+                reply_markup = {"inline_keyboard": inline_buttons} if inline_buttons else MAIN_KEYBOARD
+                await send_telegram_message(plain_bot_token, chat_id, catalog_text, reply_markup)
+                return {"status": "handled_products"}
+            else:
+                await send_telegram_message(
+                    plain_bot_token, chat_id,
+                    "Hozircha katalogda faol mahsulotlar mavjud emas. Tez orada yangi tovarlar qo'shiladi!",
+                    MAIN_KEYBOARD
+                )
+                return {"status": "handled_products_empty"}
+
+        # 7. AI SALES ENGINE BILAN JAVOB TAYYORLASH
         ai_reply_text, tool_calls_made, is_handoff = await ai_engine.generate_response(
             db, organization, customer, conversation, text_content
         )
+
+        if is_handoff:
+            conversation.is_operator_mode = True
+            conversation.unread_count += 1
+            await db.commit()
 
         # Buyurtma boshlanishini ushlash (AI javobidan [ORDER:Mahsulot_nomi] tegini izlash)
         order_match = re.search(r'\[ORDER:(.*?)\]', ai_reply_text)
@@ -452,7 +573,10 @@ async def telegram_webhook(
             customer.stage = CustomerStageEnum.CONSIDERING
             await db.commit()
 
-            final_text = f"✅ *{escape_markdown(product_name)}* tanlandi.\n\n🔢 Iltimos, nechta kerakligini yozing (faqat raqam, masalan: 1, 2):"
+            clean_reply = re.sub(r'\[ORDER:.*?\]', '', ai_reply_text).strip()
+            final_text = f"✅ *{escape_markdown(product_name)}* tanlandi.\n\n🔢 *Nechta dona kerak?* (faqat raqam, masalan: 1, 2):"
+            if clean_reply:
+                final_text = f"{clean_reply}\n\n{final_text}"
 
             ai_msg = Message(
                 conversation_id=conversation.id,

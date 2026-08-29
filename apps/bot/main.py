@@ -107,6 +107,35 @@ async def help_handler(message: types.Message):
     )
     await message.answer(faq_text, parse_mode="Markdown")
 
+@router.callback_query()
+async def callback_query_handler(callback: types.CallbackQuery):
+    """Forwards inline button clicks to the FastAPI webhook."""
+    target_org = ORG_ID if ORG_ID else "auto"
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            payload = {
+                "update_id": callback.id,
+                "callback_query": {
+                    "id": callback.id,
+                    "from": {
+                        "id": callback.from_user.id,
+                        "first_name": callback.from_user.first_name,
+                        "last_name": callback.from_user.last_name,
+                        "username": callback.from_user.username
+                    },
+                    "message": {
+                        "message_id": callback.message.message_id,
+                        "chat": {"id": callback.message.chat.id, "type": "private"}
+                    },
+                    "data": callback.data
+                }
+            }
+            await client.post(f"{API_BASE_URL}/webhook/telegram/{target_org}", json=payload)
+            await callback.answer()
+        except Exception as e:
+            logger.error(f"Error forwarding callback query: {e}")
+            await callback.answer()
+
 @router.message()
 async def default_ai_message_handler(message: types.Message):
     """Routes all unhandled text messages directly to the FastAPI Webhook endpoint for AI Processing."""

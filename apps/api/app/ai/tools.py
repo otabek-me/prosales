@@ -133,6 +133,7 @@ async def execute_tool_call(
     """Executes a function tool call strictly isolated by organization_id."""
 
     if function_name == "search_products":
+        import re
         query_text = (arguments.get("query") or "").strip()
         max_price = arguments.get("max_price")
 
@@ -142,25 +143,46 @@ async def execute_tool_call(
             Product.stock > 0
         )
 
-        if query_text:
+        generic_stop_words = {"all", "barcha", "katalog", "hamma", "mahsulotlar", "tovarlar", "ro'yxat", "list", "bor", "mavjud", "iltimos", "taqdim", "qiling", "eting", "chiroyli"}
+        words = [w.strip() for w in re.split(r'[\s,;.!?]+', query_text) if len(w.strip()) > 1]
+        specific_words = [w for w in words if w.lower() not in generic_stop_words and len(w) > 2]
+
+        if specific_words:
+            conditions = []
+            for w in specific_words:
+                conditions.append(Product.name.ilike(f"%{w}%"))
+                conditions.append(Product.description.ilike(f"%{w}%"))
+            stmt = stmt.where(or_(*conditions))
+        elif query_text and query_text.lower() not in generic_stop_words and len(words) <= 2:
             stmt = stmt.where(
                 or_(
                     Product.name.ilike(f"%{query_text}%"),
                     Product.description.ilike(f"%{query_text}%")
                 )
             )
+
         if max_price:
             try:
                 stmt = stmt.where(Product.price <= float(max_price))
             except (ValueError, TypeError):
-                pass  # noto'g'ri narx formati bo'lsa, e'tiborsiz qoldiramiz
+                pass
 
-        stmt = stmt.limit(5)
+        stmt = stmt.order_by(Product.created_at.desc()).limit(8)
         result = await db.execute(stmt)
         products = result.scalars().all()
 
         if not products:
-            return json.dumps({"status": "empty", "message": "Mos mahsulotlar topilmadi yoki barchasi sotilib ketgan."})
+            # If search with specific keywords returned empty, fallback to latest in-stock products
+            res_all = await db.execute(
+                select(Product).where(
+                    Product.organization_id == org_id,
+                    Product.is_active == True,
+                    Product.stock > 0
+                ).order_by(Product.created_at.desc()).limit(5)
+            )
+            products = res_all.scalars().all()
+            if not products:
+                return json.dumps({"status": "empty", "message": "Do'konda hozircha mahsulotlar mavjud emas."})
 
         res_data = []
         for p in products:

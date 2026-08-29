@@ -1,36 +1,37 @@
+import urllib.parse
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from app.config import settings
 
-is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+raw_db_url = (settings.DATABASE_URL or "").strip()
+if raw_db_url.startswith("DATABASE_URL="):
+    raw_db_url = raw_db_url.replace("DATABASE_URL=", "", 1).strip()
+
+if raw_db_url.startswith("postgresql://"):
+    raw_db_url = raw_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif raw_db_url.startswith("postgres://"):
+    raw_db_url = raw_db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+is_sqlite = raw_db_url.startswith("sqlite")
 
 if is_sqlite:
     connect_args = {"check_same_thread": False}
 else:
-    # MUHIM: Agar DATABASE_URL PgBouncer yoki boshqa transaction-pooling
-    # connection pooler orqali ulansa (Render/Supabase/Neon kabi
-    # platformalarda odatiy holat), asyncpg'ning server-side prepared
-    # statement keshini O'CHIRISH SHART.
-    #
-    # Sababi: pooler har bir so'rovni turli backend Postgres connection'lariga
-    # yo'naltirishi mumkin, lekin asyncpg statement'ni ma'lum bir backend
-    # connection'da "prepare" qilib keshlaydi. Backend almashganda yoki
-    # sxema o'zgarganda (masalan ALTER TABLE), eski keshlangan statement
-    # yaroqsiz bo'lib qoladi va "InvalidCachedStatementError: cached
-    # statement plan is invalid due to a database schema or configuration
-    # change" xatosi takror-takror chiqaveradi.
-    #
-    # statement_cache_size=0 — asyncpg'ga har bir so'rovni keshlamasdan,
-    # to'g'ridan-to'g'ri (oddiy query protocol bilan) bajarishni buyuradi.
-    # Bu picha unumdorlikdan yutqazadi, lekin pooler bilan ishlashda
-    # yagona ishonchli yechim hisoblanadi.
     connect_args = {
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
     }
+    # Clean query parameters for asyncpg
+    if "?" in raw_db_url:
+        parsed = urllib.parse.urlparse(raw_db_url)
+        q_dict = urllib.parse.parse_qs(parsed.query)
+        q_dict.pop("sslmode", None)
+        q_dict.pop("channel_binding", None)
+        new_query = urllib.parse.urlencode(q_dict, doseq=True)
+        raw_db_url = urllib.parse.urlunparse(parsed._replace(query=new_query))
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    raw_db_url,
     echo=settings.ENVIRONMENT == "development",
     future=True,
     connect_args=connect_args,
