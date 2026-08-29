@@ -98,36 +98,46 @@ app.include_router(webhook.router, prefix=v1)
 app.include_router(webhook.router)
 
 
+async def _ensure_column(conn, dialect, table, column, sqlite_type, pg_type):
+    """Yengil (idempotent) migration: jadvalda ustun yo'q bo'lsa qo'shadi.
+
+    SQLAlchemy create_all mavjud jadvalga ustun qo'shmaydi, shuning uchun bu yerda
+    SQL orqali idempotent tarzda qo'shamiz.
+    """
+    from sqlalchemy import text
+    if dialect == "sqlite":
+        res = await conn.execute(text(
+            f"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = :c"
+        ), {"c": column})
+        has_col = bool((res.scalar() or 0) > 0)
+        if not has_col:
+            await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sqlite_type}"))
+            logger.info("Added %s.%s (sqlite)", table, column)
+    else:
+        res = await conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_name = :t AND column_name = :c"
+        ), {"t": table, "c": column})
+        has_col = bool((res.scalar() or 0) > 0)
+        if not has_col:
+            await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {pg_type}"))
+            logger.info("Added %s.%s (postgres)", table, column)
+
+
+async def _run_lightweight_migrations(conn) -> None:
+    dialect = conn.dialect.name
+    # Tanlangan mahsulotning aniq row ID si (narx noto'g'ri topilmasligi uchun).
+    await _ensure_column(conn, dialect, "customers", "draft_product_id", "CHAR(32)", "UUID")
+    # Buyurtma zaxirasi ayirilganligi bayrog'i (idempotent stock boshqaruvi).
+    await _ensure_column(conn, dialect, "orders", "stock_deducted", "BOOLEAN", "BOOLEAN")
+
+
 @app.on_event("startup")
 async def on_startup():
     logger.info("Initializing database tables...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
-        # Idempotent lightweight migration: draft_product_id ustuni mavjud bo'lmasa qo'shamiz.
-        # (create_all yangi jadvalgina yaratadi, mavjud jadvalga ustun qo'shmaydi.)
-        dialect = conn.dialect.name
-        if dialect == "sqlite":
-            from sqlalchemy import text
-            res = await conn.execute(text(
-                "SELECT COUNT(*) FROM pragma_table_info('customers') "
-                "WHERE name = 'draft_product_id'"
-            ))
-            has_col = bool((res.scalar() or 0) > 0)
-            if not has_col:
-                await conn.execute(text("ALTER TABLE customers ADD COLUMN draft_product_id CHAR(32)"))
-                logger.info("Added customers.draft_product_id (sqlite)")
-        else:
-            from sqlalchemy import text
-            res = await conn.execute(text(
-                "SELECT COUNT(*) FROM information_schema.columns "
-                "WHERE table_name = 'customers' AND column_name = 'draft_product_id'"
-            ))
-            has_col = bool((res.scalar() or 0) > 0)
-            if not has_col:
-                await conn.execute(text("ALTER TABLE customers ADD COLUMN draft_product_id UUID"))
-                logger.info("Added customers.draft_product_id (postgres)")
-
+        await _run_lightweight_migrations(conn)
     logger.info("Database tables initialized.")
 
     # Avtomatik Webhook Sinxronizatsiyasi (.env dagi TELEGRAM_WEBHOOK_DOMAIN bo'yicha)

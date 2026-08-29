@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models import Order, OrderItem, OrderStatusEnum
 from app.schemas import OrderResponse, OrderStatusUpdate, StandardResponse
 from app.dependencies import get_current_organization_id, RequirePermission
+from app.stock import deduct_stock_for_order, restore_stock_for_order, status_needs_restock
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -52,6 +53,15 @@ async def update_order_status(
         raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
 
     order.status = data.status
+
+    # Status o'zgarishiga mos ravishda zaxirani boshqarish (idempotent):
+    # - CANCELLED / REFUNDED -> zaxira qaytariladi.
+    # - Boshqa (faol) statuslar -> zaxira ayirilganligi ta'minlanadi.
+    if status_needs_restock(order.status):
+        await restore_stock_for_order(db, order)
+    else:
+        await deduct_stock_for_order(db, order)
+
     await db.commit()
 
     res = await db.execute(select(Order).where(Order.id == order_id))

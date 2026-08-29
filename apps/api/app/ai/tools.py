@@ -348,6 +348,8 @@ async def execute_tool_call(
 
         # --- 5. Mahsulot zaxirasini yangilash ---
         product.stock -= qty
+        # Zaxiradan ayirildi — bekor qilishda qaytarish mumkin bo'lsin (idempotent bayroq).
+        new_order.stock_deducted = True
 
         # --- 6. Mijoz ma'lumotlarini yangilash ---
         cust_res = await db.execute(select(Customer).where(Customer.id == customer_id))

@@ -254,6 +254,10 @@ async def _handle_order_fsm(
                 db.add(order_item)
                 new_order.total_amount = total_price
                 customer.total_spent = float(customer.total_spent or 0) + total_price
+                # Zaxiradan ayirish (salbiy bo'lmasligi uchun max(0)). Idempotent bayroq o'rnatiladi,
+                # bekor qilinadigan bo'lsa stock.py orqali qaytariladi.
+                product_obj.stock = max(0, (float(product_obj.stock) or 0) - qty)
+                new_order.stock_deducted = True
             else:
                 new_order.notes = f"AI qabul qilgan mahsulot: {product_name} ({qty} dona)."
 
@@ -557,6 +561,7 @@ async def telegram_webhook(
             found_res = await db.execute(
                 select(Order).where(
                     Order.organization_id == resolved_org_id,
+                    Order.customer_id == customer.id,
                     or_(
                         Order.order_number.ilike(f"%{ord_match.group(0)}%"),
                         Order.order_number.ilike(f"%{searched_code}%")
@@ -565,33 +570,54 @@ async def telegram_webhook(
             )
             found_ord = found_res.scalars().first()
             if found_ord:
-                status_labels = {
-                    OrderStatusEnum.PENDING: "⏳ Kutilmoqda (operator tez orada tasdiqlaydi)",
-                    OrderStatusEnum.CONFIRMED: "✅ Tasdiqlangan (yetkazishga tayyorlanmoqda)",
-                    OrderStatusEnum.PROCESSING: "📦 Tayyorlanmoqda",
-                    OrderStatusEnum.SHIPPED: "🚚 Yo'lda (kuryer yetkazmoqda)",
-                    OrderStatusEnum.DELIVERED: "🎉 Yetkazib berildi",
-                    OrderStatusEnum.CANCELLED: "❌ Bekor qilingan"
-                }
-                st_str = status_labels.get(found_ord.status, found_ord.status.value)
-                info_msg = (
-                    f"📦 *Buyurtma #{found_ord.order_number} holati:*\n\n"
-                    f"📊 *Status:* {st_str}\n"
-                    f"💰 *Jami summa:* {float(found_ord.total_amount):,.0f} {found_ord.currency}\n"
-                    f"👤 *Xaridor:* {escape_markdown(found_ord.customer_name or 'Mijoz')}\n"
-                    f"📞 *Telefon:* {found_ord.customer_phone or '-'}\n"
-                    f"📍 *Manzil:* {escape_markdown(found_ord.delivery_address or '-')}\n"
-                )
-                if found_ord.items:
-                    info_msg += "\n🛍 *Mahsulotlar:* \n"
-                    for it in found_ord.items:
-                        info_msg += f"▪️ {escape_markdown(it.product_name)} ({it.quantity} dona — {float(it.total):,.0f} UZS)\n"
-                elif found_ord.notes:
-                    info_msg += f"\n📝 *Qayd:* _{escape_markdown(found_ord.notes)}_\n"
+                try:
+                    status_labels = {
+                        OrderStatusEnum.PENDING: "⏳ Kutilmoqda (operator tez orada tasdiqlaydi)",
+                        OrderStatusEnum.CONFIRMED: "✅ Tasdiqlangan (yetkazishga tayyorlanmoqda)",
+                        OrderStatusEnum.PROCESSING: "📦 Tayyorlanmoqda",
+                        OrderStatusEnum.SHIPPED: "🚚 Yo'lda (kuryer yetkazmoqda)",
+                        OrderStatusEnum.DELIVERED: "🎉 Yetkazib berildi",
+                        OrderStatusEnum.CANCELLED: "❌ Bekor qilingan"
+                    }
+                    st_str = status_labels.get(found_ord.status, found_ord.status.value)
+                    info_msg = (
+                        f"📦 *Buyurtma #{escape_markdown(found_ord.order_number)} holati:*\n\n"
+                        f"📊 *Status:* {st_str}\n"
+                        f"💰 *Jami summa:* {float(found_ord.total_amount or 0):,.0f} {found_ord.currency or 'UZS'}\n"
+                        f"👤 *Xaridor:* {escape_markdown(found_ord.customer_name or 'Mijoz')}\n"
+                        f"📞 *Telefon:* {escape_markdown(found_ord.customer_phone or '-')}\n"
+                        f"📍 *Manzil:* {escape_markdown(found_ord.delivery_address or '-')}\n"
+                    )
+                    if found_ord.items:
+                        info_msg += "\n🛍 *Mahsulotlar:* \n"
+                        for it in found_ord.items:
+                            info_msg += f"▪️ {escape_markdown(it.product_name)} ({it.quantity} dona — {float(it.total or 0):,.0f} UZS)\n"
+                    elif found_ord.notes:
+                        info_msg += f"\n📝 *Qayd:* _{escape_markdown(found_ord.notes)}_\n"
 
-                info_msg += "\nQo'shimcha savollaringiz bo'lsa, bemalol so'rashingiz mumkin! 😊"
-                await send_telegram_message(plain_bot_token, chat_id, info_msg, MAIN_KEYBOARD)
+                    info_msg += "\nQo'shimcha savollaringiz bo'lsa, bemalol so'rashingiz mumkin! 😊"
+                    await send_telegram_message(plain_bot_token, chat_id, info_msg, MAIN_KEYBOARD)
+                except Exception as e:
+                    # Xabar tuzish/hos qilishda xatolik bo'lsa ham bot "jim" qolmasin.
+                    logger.exception(f"Buyurtma holatini tayyorlashda xatolik: {e}")
+                    await send_telegram_message(
+                        plain_bot_token, chat_id,
+                        "Kechirasiz, buyurtma ma'lumotlarini olishda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.",
+                        MAIN_KEYBOARD
+                    )
                 return {"status": "handled_order_number"}
+            else:
+                # Topilmagan — AI'ga o'tkazish o'rniga darhol aniqlik so'raymiz.
+                # Ilgari bu yerda fall-through bo'lib, AI engine'ga tushib qolardi (sekin/hang ham mumkin).
+                await send_telegram_message(
+                    plain_bot_token, chat_id,
+                    "⚠️ *Buyurtma topilmadi.*\n\n"
+                    "Iltimos, buyurtma raqamini to'g'ri yozganingizni tekshiring "
+                    "(masalan: `ORD-7A17FE`).\n"
+                    "Buyurtmalar ro'yxatini ko'rish uchun *📦 Buyurtmalarim* tugmasini bosing.",
+                    MAIN_KEYBOARD
+                )
+                return {"status": "handled_order_number_not_found"}
 
         if text_lower in ["/products", "👟 mahsulotlar"]:
             prod_res = await db.execute(

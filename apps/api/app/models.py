@@ -266,6 +266,9 @@ class Order(Base):
     total_amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(10), default="UZS", nullable=False)
     notes = Column(Text, nullable=True)
+    # Zaxiradan ayirish muvaffaqiyatli bajarilganini bildiradi (idempotent uchun).
+    # True bo'lsa — mahsulot stock dan ayirilgan; bekor qilishda qaytariladi va False bo'ladi.
+    stock_deducted = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

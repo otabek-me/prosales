@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from typing import Optional, List
 from uuid import UUID
+import uuid
 import re
 
 from app.database import get_db
@@ -33,6 +34,21 @@ def generate_default_sku(name: str) -> str:
         prefix = "-".join(p[:3] for p in parts[:3])
     rand_suffix = str(random.randint(1000, 9999))
     return f"{prefix}-{rand_suffix}"
+
+
+async def _sku_is_taken(db: AsyncSession, org_id, sku: str, exclude_id=None) -> bool:
+    """Tashkilotda shu SKU boshqa mahsulotda bandmi (exclude_id bundan mustasno)."""
+    if not sku:
+        return False
+    stmt = select(Product).where(
+        Product.organization_id == org_id,
+        Product.sku.ilike(sku),
+        Product.is_active == True,
+    )
+    if exclude_id is not None:
+        stmt = stmt.where(Product.id != exclude_id)
+    res = await db.execute(stmt)
+    return res.scalars().first() is not None
 
 # --- CATEGORIES ---
 @router.get("/categories", response_model=StandardResponse)
@@ -135,6 +151,13 @@ async def create_product(
 
     sku_final = data.sku.strip() if data.sku and data.sku.strip() else generate_default_sku(data.name)
 
+    if await _sku_is_taken(db, org_id, sku_final):
+        # Avtomatik SKU band bo'lib qolgan bo'lsa — yangi unikal generatsiya qilamiz,
+        # sotuvchi bergan SKU band bo'lsa — xato.
+        if data.sku and data.sku.strip():
+            raise HTTPException(status_code=409, detail="Bu SKU kod allaqachon ishlatilgan. Boshqa SKU kiriting!")
+        sku_final = generate_default_sku(f"{data.name} {uuid.uuid4().hex[:4]}")
+
     product = Product(
         organization_id=org_id,
         category_id=data.category_id,
@@ -203,7 +226,9 @@ async def update_product(
     if data.description is not None:
         product.description = data.description
     if data.sku is not None:
-        product.sku = data.sku
+        if data.sku.strip() and await _sku_is_taken(db, org_id, data.sku.strip(), exclude_id=product.id):
+            raise HTTPException(status_code=409, detail="Bu SKU kod allaqachon ishlatilgan. Boshqa SKU kiriting!")
+        product.sku = data.sku.strip()
     if data.price is not None:
         product.price = data.price
     if data.currency is not None:
