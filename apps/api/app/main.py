@@ -103,6 +103,31 @@ async def on_startup():
     logger.info("Initializing database tables...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # Idempotent lightweight migration: draft_product_id ustuni mavjud bo'lmasa qo'shamiz.
+        # (create_all yangi jadvalgina yaratadi, mavjud jadvalga ustun qo'shmaydi.)
+        dialect = conn.dialect.name
+        if dialect == "sqlite":
+            from sqlalchemy import text
+            res = await conn.execute(text(
+                "SELECT COUNT(*) FROM pragma_table_info('customers') "
+                "WHERE name = 'draft_product_id'"
+            ))
+            has_col = bool((res.scalar() or 0) > 0)
+            if not has_col:
+                await conn.execute(text("ALTER TABLE customers ADD COLUMN draft_product_id CHAR(32)"))
+                logger.info("Added customers.draft_product_id (sqlite)")
+        else:
+            from sqlalchemy import text
+            res = await conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'customers' AND column_name = 'draft_product_id'"
+            ))
+            has_col = bool((res.scalar() or 0) > 0)
+            if not has_col:
+                await conn.execute(text("ALTER TABLE customers ADD COLUMN draft_product_id UUID"))
+                logger.info("Added customers.draft_product_id (postgres)")
+
     logger.info("Database tables initialized.")
 
     # Avtomatik Webhook Sinxronizatsiyasi (.env dagi TELEGRAM_WEBHOOK_DOMAIN bo'yicha)

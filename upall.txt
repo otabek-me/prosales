@@ -1,0 +1,12 @@
+$body = @{
+    email = "otabekrahmiddinov08@gmail.com"
+    password = "otabekadmin"
+    full_name = "Otabek Rahmiddinov"
+    phone = "+998955714205"
+    secret_key = "super_secret_key_32bytes_minimum_length_change_in_prod"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "https://prosales-y78i.onrender.com/api/v1/superadmin/create" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body $body

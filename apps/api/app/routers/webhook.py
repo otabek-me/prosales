@@ -61,6 +61,7 @@ def escape_markdown(text: str) -> str:
 
 def _clear_draft(customer: Customer) -> None:
     customer.draft_product = None
+    customer.draft_product_id = None
     customer.draft_quantity = None
     customer.draft_name = None
     customer.draft_surname = None
@@ -220,11 +221,25 @@ async def _handle_order_fsm(
             product_name = customer.draft_product or "Noma'lum mahsulot"
             qty = customer.draft_quantity or 1
 
-            prod_res = await db.execute(select(Product).where(
-                Product.organization_id == organization_id,
-                Product.name.ilike(f"%{product_name}%")
-            ))
-            product_obj = prod_res.scalars().first()
+            # Narxni ANIQ tanlangan mahsulotdan olamiz (draft_product_id orqali).
+            # Ilgari bu yerda faqat nom bo'yicha "ilike ... first()" qidiruv bor edi —
+            # nomda o'xshash bir nechta mahsulot bo'lsa, noto'g'ri (arxiv/cheap) birini
+            # topib, summani buzardi. Endi aniq row ishlatiladi, nomga tushgan bo'lsa
+            # fallback sifatida eski qidiruv saqlanadi.
+            product_obj = None
+            if customer.draft_product_id is not None:
+                prod_id_res = await db.execute(select(Product).where(
+                    Product.id == customer.draft_product_id,
+                    Product.organization_id == organization_id
+                ))
+                product_obj = prod_id_res.scalars().first()
+
+            if product_obj is None:
+                prod_res = await db.execute(select(Product).where(
+                    Product.organization_id == organization_id,
+                    Product.name.ilike(f"%{product_name}%")
+                ))
+                product_obj = prod_res.scalars().first()
 
             if product_obj:
                 total_price = float(product_obj.price) * qty
@@ -375,6 +390,7 @@ async def telegram_webhook(
 
             if matched_prod:
                 customer.draft_product = matched_prod.name
+                customer.draft_product_id = matched_prod.id
                 customer.order_flow_state = STAGE_ASK_QUANTITY
                 customer.stage = CustomerStageEnum.CONSIDERING
                 await db.commit()
@@ -624,6 +640,16 @@ async def telegram_webhook(
         if order_match:
             product_name = order_match.group(1).strip()
             customer.draft_product = product_name
+            # Narxni keyin aniq row'dan olish uchun mos mahsulotning ID sini ham saqlaymiz.
+            match_res = await db.execute(
+                select(Product).where(
+                    Product.organization_id == resolved_org_id,
+                    Product.is_active == True,
+                    Product.name.ilike(f"%{product_name}%")
+                ).order_by(Product.created_at.desc()).limit(1)
+            )
+            matched = match_res.scalars().first()
+            customer.draft_product_id = matched.id if matched else None
             customer.order_flow_state = STAGE_ASK_QUANTITY
             customer.stage = CustomerStageEnum.CONSIDERING
             await db.commit()

@@ -152,6 +152,11 @@ class Customer(Base):
     # o'qishda enum konvertatsiyasi buziladi). Shu sabab alohida ustun kerak.
     order_flow_state = Column(String(50), nullable=True, index=True)
     draft_product = Column(String(255), nullable=True)
+    # Tanlangan mahsulotning aniq row ID si. draft_product (nom) emas, balki shu ID
+    # asosida narx hisoblanadi — chunki nomda o'xshash bir nechta mahsulot bo'lsa,
+    # nom bo'yicha qayta qidirish ("ilike ... first()") noto'g'ri (arxiv, eski) birini
+    # topib, narxni buzishi mumkin edi.
+    draft_product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
     draft_quantity = Column(Integer, nullable=True)
     draft_name = Column(String(255), nullable=True)
     draft_surname = Column(String(255), nullable=True)
