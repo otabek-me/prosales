@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Store, Bell, Search, User, LogOut, MessageSquare, AlertTriangle,
   ShoppingBag, ShoppingCart, Users, Settings, ChevronDown, X, CheckCheck,
-  Loader2, PackageOpen, LayoutDashboard
+  Loader2, PackageOpen, LayoutDashboard, Sparkles
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -56,6 +56,7 @@ export default function Navbar() {
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResults>({ products: [], orders: [], customers: [] });
   const [notifOpen, setNotifOpen] = useState(false);
+  const [notifFilter, setNotifFilter] = useState<'all' | 'order' | 'operator'>('all');
   const [notifLoading, setNotifLoading] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
@@ -223,33 +224,55 @@ export default function Navbar() {
             {notificationCount > 0 && (<span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-slate-900">{notificationCount > 99 ? '99+' : notificationCount}</span>)}
           </button>
           {notifOpen && (
-            <div className="absolute right-0 top-12 z-[110] w-80 sm:w-96 rounded-2xl glass-panel border border-slate-700/60 shadow-2xl shadow-black/50 overflow-hidden animate-fade-in">
-              <div className="p-3 border-b border-slate-800 flex items-center justify-between">
+            <div className="absolute right-0 top-12 z-50 w-80 sm:w-96 rounded-2xl bg-[#0f1219] border border-slate-800 shadow-xl shadow-black/60 overflow-hidden animate-fade-in flex flex-col">
+              {/* Header */}
+              <div className="p-3 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
                 <span className="text-sm font-bold text-white flex items-center gap-2"><Bell className="w-4 h-4 text-indigo-400" /> Bildirishnomalar</span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => { setNotifications((prev: any) => prev.map((n: any) => ({ ...n, unread: false }))); setNotificationCount(0); setOperatorAlert(0); }} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors" title="Barchasini o'qilgan qilish"><CheckCheck className="w-4 h-4" /></button>
                   <button onClick={() => setNotifOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" title="Yopish"><X className="w-4 h-4" /></button>
                 </div>
               </div>
-              <div className="max-h-96 overflow-y-auto flex flex-col">
-                {notifLoading && notifications.length === 0 ? (<div className="p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-indigo-400" /></div>
-                ) : notifications.length === 0 ? (<div className="p-8 text-center text-xs text-slate-500"><PackageOpen className="w-8 h-8 mx-auto mb-2 text-slate-600" />Hozircha bildirishnomalar yo'q</div>
-                ) : notifications.map((n: any, i: number) => (
-                  <Link key={i} href={n.link || '/dashboard/notifications'} onClick={() => setNotifOpen(false)} className={'flex items-start gap-3 px-4 py-3.5 hover:bg-slate-800/50 transition-colors border-b border-slate-800/50 last:border-0 ' + (n.unread ? 'bg-indigo-500/5' : '')}>
-                    <span className="text-lg leading-none shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800/80 flex-shrink-0">{n.type === 'operator_request' ? '\uD83D\uDC68\u200D\u2022' : n.type === 'new_order' ? '\uD83D\DED2' : '\uD83D\uDD39'}</span>
-                    <div className="min-w-0 flex-1 flex flex-col gap-1">
-                      <div className="text-sm font-medium text-white flex items-center gap-2 min-w-0"><span className="truncate">{n.title}</span>{n.unread && <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0 flex-shrink-0" />}</div>
-                      <div className="text-xs text-slate-400 leading-relaxed break-words line-clamp-2">{n.body}</div>
-                    </div>
-                  </Link>
+              {/* Filter row */}
+              <div className="p-2 border-b border-slate-800 flex items-center gap-1.5 flex-shrink-0">
+                {([['all', 'Barchasi'], ['order', 'Buyurtmalar'], ['operator', 'Operator so\u2018rovlari']] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setNotifFilter(key)}
+                    className={'px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ' + (notifFilter === key ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40' : 'bg-slate-800/50 text-slate-400 border border-transparent hover:text-white hover:bg-slate-800')}
+                  >
+                    {label}
+                  </button>
                 ))}
               </div>
-              <div className="p-2 border-t border-slate-800 flex gap-2">
+              {/* List */}
+              <div className="flex flex-col gap-1 max-h-96 overflow-y-auto p-2">
+                {notifLoading && notifications.length === 0 ? (<div className="p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-indigo-400" /></div>
+                ) : notifications.length === 0 ? (<div className="p-8 text-center text-xs text-slate-500"><PackageOpen className="w-8 h-8 mx-auto mb-2 text-slate-600" />Hozircha bildirishnomalar yo&apos;q</div>
+                ) : (
+                  notifications
+                    .filter((n: any) => notifFilter === 'all' || (notifFilter === 'operator' ? n.type === 'operator_request' : n.type === 'new_order'))
+                    .map((n: any, i: number) => (
+                      <Link key={i} href={n.link || '/dashboard/notifications'} onClick={() => setNotifOpen(false)} className={'flex items-start gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-colors border border-transparent ' + (n.unread ? 'bg-indigo-500/10 border-indigo-500/20' : '')}>
+                        <span className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg bg-slate-800 border border-slate-700/60">
+                          {n.type === 'operator_request' ? <User className="w-4 h-4 text-amber-400" /> : n.type === 'new_order' ? <ShoppingCart className="w-4 h-4 text-emerald-400" /> : <Sparkles className="w-4 h-4 text-indigo-400" />}
+                        </span>
+                        <div className="min-w-0 flex-1 flex flex-col gap-1">
+                          <div className="text-sm font-medium text-white flex items-center gap-2 min-w-0"><span className="truncate">{n.title}</span>{n.unread && <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0 flex-shrink-0" />}</div>
+                          <div className="text-xs text-slate-400 leading-relaxed break-words line-clamp-2">{n.body}</div>
+                        </div>
+                      </Link>
+                    ))
+                )}
+              </div>
+              {/* Footer */}
+              <div className="p-3 border-t border-slate-800 flex gap-2 flex-shrink-0">
                 <Link href="/dashboard/inbox" onClick={() => setNotifOpen(false)} className="flex-1 text-center py-2 rounded-xl text-xs font-semibold bg-slate-800/60 hover:bg-slate-700 text-slate-300 transition-colors">Inbox</Link>
-                <Link href="/dashboard/notifications" onClick={() => setNotifOpen(false)} className="flex-1 text-center py-2 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition-colors">Barchasini ko'rish</Link>
+                <Link href="/dashboard/notifications" onClick={() => setNotifOpen(false)} className="flex-1 text-center py-2 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition-colors">Barchasini ko&apos;rish</Link>
               </div>
             </div>
           )}
+
         </div>
         <Link href="/dashboard/inbox" className="p-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-300 hover:text-white relative transition-colors" title="Jonli xabarlar">
           <MessageSquare className="w-4 h-4" />
