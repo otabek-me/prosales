@@ -284,8 +284,8 @@ export default function Navbar() {
             <ChevronDown className={'w-3.5 h-3.5 text-slate-500 transition-transform ' + (profileOpen ? 'rotate-180' : '')} />
           </button>
           {profileOpen && (
-            <div className="absolute right-0 top-12 z-[110] w-64 rounded-2xl glass-panel border border-slate-700/60 shadow-2xl shadow-black/50 overflow-hidden animate-fade-in">
-              <div className="p-4 border-b border-slate-800 flex items-center gap-3 bg-gradient-to-br from-indigo-500/10 to-purple-500/5">
+            <div className="absolute right-0 top-12 z-50 w-64 rounded-2xl bg-[#0f1219] border border-slate-800 shadow-xl shadow-black/60 overflow-hidden animate-fade-in flex flex-col">
+              <div className="p-4 border-b border-slate-800 flex items-center gap-3 bg-gradient-to-br from-indigo-500/10 to-purple-500/5 flex-shrink-0">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-base shadow-lg shrink-0">{profile ? initials : <User className="w-5 h-5" />}</div>
                 <div className="min-w-0"><div className="text-sm font-bold text-white truncate">{profile?.full_name || 'Foydalanuvchi'}</div><div className="text-xs text-indigo-300 truncate">{profile?.email || orgName || ''}</div></div>
               </div>
@@ -293,7 +293,7 @@ export default function Navbar() {
                 <button onClick={() => { router.push('/dashboard'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 transition-colors"><span className="text-slate-400 flex items-center"><LayoutDashboard className="w-4 h-4" /></span>Dashboard</button>
                 <button onClick={() => { router.push('/dashboard/settings'); setProfileOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 transition-colors"><span className="text-slate-400 flex items-center"><Settings className="w-4 h-4" /></span>Sozlamalar</button>
               </div>
-              <div className="p-1.5 border-t border-slate-800"><button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors"><LogOut className="w-4 h-4" />Chiqish</button></div>
+              <div className="p-1.5 border-t border-slate-800 flex-shrink-0"><button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors"><LogOut className="w-4 h-4" />Chiqish</button></div>
             </div>
           )}
         </div>
