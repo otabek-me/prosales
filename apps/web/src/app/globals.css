@@ -33,6 +33,7 @@ h1, h2, h3, .font-display {
   letter-spacing: -0.02em;
 }
 
+/* ===== Ambient layered background ===== */
 .app-shell {
   position: relative;
   isolation: isolate;
@@ -52,6 +53,15 @@ h1, h2, h3, .font-display {
   position: fixed;
   inset: 0;
   z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 80%);
+}
+
+/* ===== Glass panels ===== */
 .glass-panel {
   position: relative;
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.55));
@@ -77,6 +87,7 @@ h1, h2, h3, .font-display {
   transform: translateY(-2px);
 }
 
+/* ===== Gradient border ===== */
 .gradient-border {
   position: relative;
   border-radius: 1rem;
@@ -93,6 +104,10 @@ h1, h2, h3, .font-display {
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ===== Buttons ===== */
 .btn-primary {
   position: relative;
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
@@ -121,6 +136,7 @@ h1, h2, h3, .font-display {
   color: #fff;
 }
 
+/* ===== Inputs ===== */
 .input-field {
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.15);
@@ -133,11 +149,18 @@ h1, h2, h3, .font-display {
   background: rgba(15, 23, 42, 0.8);
 }
 
+/* ===== Text gradient ===== */
 .text-gradient {
   background: linear-gradient(90deg, #818cf8, #c084fc, #818cf8);
   background-size: 200% auto;
   -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   background-clip: text;
+  color: transparent;
+  animation: shine 6s linear infinite;
+}
+
+/* ===== Scrollbar ===== */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -158,6 +181,7 @@ h1, h2, h3, .font-display {
   color: #fff;
 }
 
+/* ===== Keyframes ===== */
 @keyframes shine {
   to { background-position: 200% center; }
 }
@@ -178,19 +202,11 @@ h1, h2, h3, .font-display {
   100% { background-position: 400px 0; }
 }
 
-.animate-fade-in-up {
-  animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-.animate-fade-in {
-  animation: fade-in 0.25s ease both;
-}
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
-
-.stagger > * {
-  animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
+/* ===== Animation utilities ===== */
+.animate-fade-in-up { animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-fade-in { animation: fade-in 0.25s ease both; }
+.animate-float { animation: float 6s ease-in-out infinite; }
+.stagger > * { animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .stagger > *:nth-child(1) { animation-delay: 0.03s; }
 .stagger > *:nth-child(2) { animation-delay: 0.07s; }
 .stagger > *:nth-child(3) { animation-delay: 0.11s; }
@@ -209,16 +225,4 @@ h1, h2, h3, .font-display {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
-}
-  -webkit-text-fill-color: transparent;
-  animation: shine 6s linear infinite;
-}
-  pointer-events: none;
-}
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
-  background-size: 64px 64px;
-  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 80%);
 }
