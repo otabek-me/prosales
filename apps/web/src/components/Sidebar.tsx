@@ -35,16 +35,16 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 glass-panel h-screen fixed left-0 top-0 z-40 flex flex-col justify-between p-4 border-r border-slate-800">
+    <aside className="w-64 glass-panel h-screen fixed left-0 top-0 z-40 flex flex-col justify-between p-4 border-r border-slate-800 hidden md:flex">
       <div>
         {/* Brand Logo */}
         <div className="flex items-center gap-3 px-2 py-3 mb-6 border-b border-slate-800">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 animate-float">
             <Sparkles className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-300">
-              SalesAI SaaS
+            <h1 className="font-bold text-lg font-display">
+              <span className="text-gradient">SalesAI</span>
             </h1>
             <p className="text-xs text-indigo-400 font-medium">Uzbekistan AI Engine</p>
           </div>
@@ -59,14 +59,17 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                className={`group relative flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
                   isActive
-                    ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-gradient-to-r from-indigo-600/25 to-purple-600/15 text-indigo-300 border border-indigo-500/30 shadow-inner'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
                 }`}
               >
+                {isActive && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-gradient-to-b from-indigo-400 to-purple-400" />
+                )}
                 <div className="flex items-center gap-3">
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
+                  <Icon className={`w-5 h-5 transition-colors ${isActive ? 'text-indigo-400' : 'text-slate-400 group-hover:text-indigo-300'}`} />
                   <span>{item.name}</span>
                 </div>
                 {item.badge && (
@@ -84,7 +87,7 @@ export default function Sidebar() {
       <div className="pt-4 border-t border-slate-800">
         <Link
           href="/superadmin"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 transition-all"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/25 hover:border-purple-500/40 hover:text-purple-300 transition-all"
         >
           <ShieldAlert className="w-4 h-4" />
           <span>Super Admin Platform</span>

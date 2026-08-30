@@ -86,30 +86,33 @@ export default function DashboardOverview() {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="glass-panel p-6 rounded-2xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="z-10">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="px-3 py-1 text-xs font-semibold rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> AI Sales Assistant
-            </span>
+      <div className="gradient-border rounded-2xl">
+        <div className="glass-panel p-6 md:p-8 rounded-xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="absolute -top-20 -left-20 w-72 h-72 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="z-10 relative">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-3 py-1 text-xs font-semibold rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> AI Sales Assistant
+              </span>
+            </div>
+            <h2 className="text-3xl font-bold text-white font-display tracking-tight">Boshqaruv Paneli 👋</h2>
+            <p className="text-sm text-slate-400 mt-2">AI sotuvlar ko&apos;rsatkichi va Telegram muloqotlari statistikasi.</p>
           </div>
-          <h2 className="text-2xl font-bold text-white">Boshqaruv Paneli 👋</h2>
-          <p className="text-sm text-slate-400 mt-1">AI sotuvlar ko&apos;rsatkichi va Telegram muloqotlari statistikasi.</p>
-        </div>
 
-        <div className="flex items-center gap-3 z-10">
-          <Link
-            href="/dashboard/inbox"
-            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-all shadow-lg shadow-indigo-600/30 flex items-center gap-2"
-          >
-            <MessageSquare className="w-4 h-4" /> Live Inbox
-          </Link>
+          <div className="flex items-center gap-3 z-10 relative">
+            <Link
+              href="/dashboard/inbox"
+              className="px-4 py-2.5 rounded-xl btn-primary text-white font-medium text-sm flex items-center gap-2"
+            >
+              <MessageSquare className="w-4 h-4" /> Live Inbox
+            </Link>
           <Link
             href="/dashboard/products"
             className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-sm transition-all border border-slate-700 flex items-center gap-2"
           >
             <ShoppingBag className="w-4 h-4" /> Mahsulot qo&apos;shish
           </Link>
+        </div>
         </div>
       </div>
 
@@ -118,15 +121,20 @@ export default function DashboardOverview() {
         {stats.map((item, idx) => {
           const Icon = item.icon;
           return (
-            <div key={idx} className="glass-card p-5 rounded-2xl border border-slate-800 relative overflow-hidden group hover:border-slate-700 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">{item.title}</span>
-                <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${item.color} flex items-center justify-center shadow-md`}>
+            <div key={idx} className="glass-card p-5 rounded-2xl border border-slate-800 relative overflow-hidden group hover:border-indigo-500/40 transition-all stagger">
+              {/* ambient corner glow */}
+              <div className={`absolute -top-10 -right-10 w-28 h-28 rounded-full bg-gradient-to-br ${item.color} opacity-20 blur-2xl group-hover:opacity-35 transition-opacity`} />
+              <div className="relative flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-400 font-display">{item.title}</span>
+                <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${item.color} flex items-center justify-center shadow-md shadow-black/30`}>
                   <Icon className="w-5 h-5 text-white" />
                 </div>
               </div>
-              <div className="mt-4 flex items-baseline justify-between">
-                <h3 className="text-xl font-bold text-white">{item.value}</h3>
+              <div className="mt-4 flex items-baseline justify-between relative">
+                <h3 className="text-2xl font-bold text-white font-display tracking-tight">{item.value}</h3>
+              </div>
+              <div className="mt-2 h-1 w-full bg-slate-800/50 rounded-full overflow-hidden relative">
+                <div className={`h-full rounded-full bg-gradient-to-r ${item.color} opacity-70`} style={{ width: `${45 + idx * 14}%` }} />
               </div>
             </div>
           );
@@ -134,13 +142,15 @@ export default function DashboardOverview() {
       </div>
 
       {/* Recent Orders */}
-      <div className="glass-panel p-6 rounded-2xl border border-slate-800">
+      <div className="gradient-border rounded-2xl">
+        <div className="glass-panel p-6 rounded-xl border border-slate-800">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5 text-indigo-400" /> So&apos;nggi buyurtmalar
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2 font-display">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center"><ShoppingCart className="w-4 h-4" /></div>
+            So&apos;nggi buyurtmalar
           </h3>
-          <Link href="/dashboard/orders" className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
-            Barchasini ko&apos;rish <ArrowUpRight className="w-3.5 h-3.5" />
+          <Link href="/dashboard/orders" className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 group">
+            Barchasini ko&apos;rish <ArrowUpRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
           </Link>
         </div>
 
@@ -182,6 +192,7 @@ export default function DashboardOverview() {
             </table>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

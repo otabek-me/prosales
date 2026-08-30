@@ -50,20 +50,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 relative overflow-hidden">
+    <div className="min-h-screen app-shell bg-slate-950 flex flex-col justify-center items-center p-4 relative overflow-hidden">
       {/* Dynamic Background Glows */}
-      <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/3 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none animate-float"></div>
+      <div className="absolute bottom-1/4 right-1/3 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl pointer-events-none animate-float" style={{ animationDelay: '-3s' }}></div>
 
-      <div className="w-full max-w-md glass-panel rounded-2xl p-8 border border-slate-800 relative z-10 shadow-2xl">
+      <div className="w-full max-w-md gradient-border rounded-2xl shadow-2xl">
+        <div className="glass-panel rounded-xl p-8 relative z-10">
         {/* Logo */}
         <div className="flex justify-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-600/30">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-600/30 animate-float">
             <Sparkles className="w-7 h-7 text-white" />
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-white text-center mb-1">
+        <h1 className="text-2xl font-bold text-white text-center mb-1 font-display tracking-tight">
           {isRegister ? "Ro'yxatdan o'tish" : "Tizimga kirish"}
         </h1>
         <p className="text-sm text-slate-400 text-center mb-6">
@@ -164,6 +165,7 @@ export default function LoginPage() {
           ))}
         </div>
       </div>
+    </div>
     </div>
   );
 }
