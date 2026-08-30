@@ -1,4 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8001/api/v1';
+// Normalize: drop any trailing slash so `${API_BASE}${path}` never produces a double `//`
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8001/api/v1').replace(/\/+$/, '');
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -40,9 +41,11 @@ export async function fetchAPI(
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (orgId) headers['X-Organization-Id'] = orgId;
 
-  const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
+    // Always fetch fresh data from the API — never serve a stale prerendered/cache result
+    cache: 'no-store',
   });
 
   if (res.status === 401) {

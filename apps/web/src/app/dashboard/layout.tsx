@@ -2,6 +2,13 @@ import React from 'react';
 import Sidebar from '../../components/Sidebar';
 import Navbar from '../../components/Navbar';
 
+// Mark the whole /dashboard/* tree as dynamic so prerendered (stale) routes are
+// never served. This segment config MUST live on a Server Component (layout) —
+// the child pages are `'use client'` components, which cannot carry `dynamic`/
+// `revalidate` (Next.js ignores them and, for `revalidate`, raises
+// "Invalid revalidate value [object Object]").
+export const dynamic = 'force-dynamic';
+
 export default function DashboardLayout({
   children,
 }: {
