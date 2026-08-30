@@ -197,6 +197,10 @@ h1, h2, h3, .font-display {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
 }
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
 @keyframes glow {
   0%, 100% { box-shadow: 0 0 18px rgba(99, 102, 241, 0.30); transform: scale(1); }
   50% { box-shadow: 0 0 30px rgba(99, 102, 241, 0.55); transform: scale(1.03); }
@@ -211,6 +215,7 @@ h1, h2, h3, .font-display {
 .animate-fade-in { animation: fade-in 0.25s ease both; }
 .animate-float { animation: float 6s ease-in-out infinite; }
 .animate-glow { animation: glow 4s ease-in-out infinite; will-change: box-shadow, transform; }
+.animate-breathe { animation: breathe 2.8s ease-in-out infinite; }
 .stagger > * { animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .stagger > *:nth-child(1) { animation-delay: 0.03s; }
 .stagger > *:nth-child(2) { animation-delay: 0.07s; }

@@ -74,7 +74,7 @@ export default function Sidebar() {
                 </div>
                 {item.badge && (
                   <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 flex-shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-breathe flex-shrink-0" />
                     {item.badge}
                   </span>
                 )}
