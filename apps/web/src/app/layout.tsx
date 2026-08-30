@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AI Sales SaaS Platform — Uzbekistan',
+  title: 'ProSales — AI Sales SaaS Platform',
   description: 'Multi-tenant AI Sales Assistant, CRM & Telegram Bot SaaS Platform for SMBs',
 };
 
