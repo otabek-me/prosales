@@ -7,6 +7,13 @@ RUN npm install
 
 COPY apps/web ./
 
+# NEXT_PUBLIC_* o'zgaruvchilari build-vaqti o'zgaruvchilari bo'lgani uchun
+# ular npm run build paytida JS ichiga bekiladi. Docker build paytida
+# NEXT_PUBLIC_API_BASE ni ARG orqali o'tkazish kerak (runtime environment
+# build'dan keyin hech narsa o'zgartirmaydi).
+ARG NEXT_PUBLIC_API_BASE=http://localhost:8001/api/v1
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
