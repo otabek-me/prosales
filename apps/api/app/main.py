@@ -8,7 +8,7 @@ from app.config import settings
 from app.database import engine, Base
 from app.routers import (
     auth, organizations, bots, products, orders, customers,
-    conversations, knowledge, analytics, subscriptions, superadmin, webhook
+    conversations, knowledge, analytics, subscriptions, superadmin, webhook, meta
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -93,6 +93,7 @@ app.include_router(knowledge.router, prefix=v1)
 app.include_router(analytics.router, prefix=v1)
 app.include_router(subscriptions.router, prefix=v1)
 app.include_router(superadmin.router, prefix=v1)
+app.include_router(meta.router, prefix=v1)
 app.include_router(webhook.router, prefix=v1)
 # Also mount webhook at root /webhook for backward compatibility
 app.include_router(webhook.router)
