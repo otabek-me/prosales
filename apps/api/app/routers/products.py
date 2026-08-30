@@ -110,7 +110,7 @@ async def list_products(
     org_id: UUID = Depends(get_current_organization_id),
     db: AsyncSession = Depends(get_db)
 ):
-    stmt = select(Product).where(Product.organization_id == org_id, Product.is_active == True)
+    stmt = select(Product).where(Product.organization_id == org_id)
     if search:
         stmt = stmt.where(
             or_(

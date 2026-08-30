@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Sparkles, Truck, CreditCard, Loader2, CheckCircle2, AlertCircle, Save } from 'lucide-react';
+import { Settings, Sparkles, Truck, CreditCard, Loader2, CheckCircle2, AlertCircle, Save, User } from 'lucide-react';
 import { apiGet, apiPut } from '@/lib/api';
 
 export default function AISettingsPage() {
@@ -19,6 +19,41 @@ export default function AISettingsPage() {
     language: 'uz',
     auto_order: false,
   });
+
+  const [profileForm, setProfileForm] = useState({ full_name: '', email: '', phone: '' });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileError, setProfileError] = useState('');
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const res = await apiGet('/auth/me');
+      const u = res.data?.user || res.data;
+      if (u) setProfileForm({ full_name: u.full_name || '', email: u.email || '', phone: u.phone || '' });
+    } catch (err) { console.error(err); }
+  };
+
+  const handleProfileSave = async () => {
+    setProfileSaving(true);
+    setProfileError('');
+    setProfileSuccess('');
+    try {
+      await apiPut('/auth/me', {
+        full_name: profileForm.full_name,
+        phone: profileForm.phone,
+      });
+      setProfileSuccess('Profil ma\'lumotlari saqlandi!');
+      setTimeout(() => setProfileSuccess(''), 3000);
+    } catch (err: any) {
+      setProfileError(err.message || 'Saqlashda xatolik');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   useEffect(() => {
     loadSettings();
@@ -99,6 +134,65 @@ export default function AISettingsPage() {
           <AlertCircle className="w-4 h-4" /> {error}
         </div>
       )}
+
+      {profileError && (
+        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" /> {profileError}
+        </div>
+      )}
+
+      {/* Profile Settings */}
+      <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-5 shadow-lg">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <User className="w-4 h-4 text-indigo-400" /> Profil ma&apos;lumotlari
+          </h3>
+          <button
+            onClick={handleProfileSave}
+            disabled={profileSaving}
+            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition-all shadow-md shadow-indigo-600/30 flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {profileSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Saqlash
+          </button>
+        </div>
+        {profileSuccess && (
+          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-3.5 h-3.5" /> {profileSuccess}
+          </div>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-300 mb-1.5 block">To&apos;liq ism</label>
+            <input
+              type="text"
+              value={profileForm.full_name}
+              onChange={(e) => setProfileForm(f => ({ ...f, full_name: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+              placeholder="Ismingiz"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Telefon raqam</label>
+            <input
+              type="tel"
+              value={profileForm.phone}
+              onChange={(e) => setProfileForm(f => ({ ...f, phone: e.target.value }))}
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+              placeholder="+998 90 123 45 67"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Email (o&apos;zgartirib bo&apos;lmaydi)</label>
+            <input
+              type="email"
+              value={profileForm.email}
+              disabled
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-500 text-sm cursor-not-allowed"
+            />
+          </div>
+        </div>
+      </div>
 
       <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-5">
         {/* Bot Identity */}

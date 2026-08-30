@@ -35,14 +35,14 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 flex-shrink-0 h-full border-r border-slate-800/60 bg-[#0a0d14] flex flex-col justify-between p-4 hidden md:flex">
+    <aside className="w-64 flex-shrink-0 h-full border-r border-slate-800/60 bg-[#0a0d14] hidden md:flex flex-col justify-between p-4 overflow-hidden">
       <div>
         {/* Brand Logo */}
         <div className="flex items-center gap-3 px-2 py-3 mb-6 border-b border-slate-800">
-          <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 animate-float">
+          <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 animate-glow">
             <Sparkles className="w-6 h-6 text-white" />
           </div>
-          <div>
+          <div className="flex-shrink-0 min-w-0">
             <h1 className="font-bold text-lg font-display">
               <span className="text-gradient">SalesAI</span>
             </h1>
@@ -73,7 +73,8 @@ export default function Sidebar() {
                   <span>{item.name}</span>
                 </div>
                 {item.badge && (
-                  <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse">
+                  <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 flex-shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
                     {item.badge}
                   </span>
                 )}

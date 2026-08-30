@@ -163,7 +163,20 @@ export default function Navbar() {
         <Link href="/dashboard/customers" className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors" title="Mijdorlar">
           <Users className="w-4 h-4" />
         </Link>
-        <button onClick={() => { setSearchOpen(true); searchInputRef.current?.focus(); }} className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors" title="Qidirish (⌘+K)">
+      </div>
+      {/* Right: search + actions */}
+      <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+        {/* Windows 11 style compact search */}
+        <button
+          onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 50); }}
+          className="hidden sm:flex items-center gap-2 w-52 lg:w-64 h-9 px-3 rounded-lg bg-slate-800/40 border border-slate-700/60 text-slate-400 hover:bg-slate-800/70 hover:border-slate-600 focus-within:border-indigo-500/60 transition-all duration-200 flex-shrink-0"
+          title="Qidirish (Ctrl+K)"
+        >
+          <Search className="w-4 h-4 flex-shrink-0 text-slate-500" />
+          <span className="flex-1 text-left text-xs truncate">Mahsulot, buyurtma...</span>
+          <kbd className="hidden lg:flex items-center px-1.5 py-0.5 rounded bg-slate-900/80 border border-slate-700 text-[10px] font-sans text-slate-500 flex-shrink-0">Ctrl K</kbd>
+        </button>
+        <button onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 50); }} className="sm:hidden p-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-300 hover:text-white transition-colors" title="Qidirish">
           <Search className="w-4 h-4" />
         </button>
 
@@ -218,22 +231,22 @@ export default function Navbar() {
                   <button onClick={() => setNotifOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" title="Yopish"><X className="w-4 h-4" /></button>
                 </div>
               </div>
-              <div className="max-h-96 overflow-y-auto">
+              <div className="max-h-96 overflow-y-auto flex flex-col">
                 {notifLoading && notifications.length === 0 ? (<div className="p-6 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-indigo-400" /></div>
                 ) : notifications.length === 0 ? (<div className="p-8 text-center text-xs text-slate-500"><PackageOpen className="w-8 h-8 mx-auto mb-2 text-slate-600" />Hozircha bildirishnomalar yo'q</div>
                 ) : notifications.map((n: any, i: number) => (
-                  <Link key={i} href={n.link} onClick={() => setNotifOpen(false)} className={'flex items-center gap-3 px-4 py-3 hover:bg-slate-800/50 transition-colors border-b border-slate-800/50 last:border-0 ' + (n.unread ? 'bg-indigo-500/5' : '')}>
-                    <span className="text-lg leading-none shrink-0 w-6 text-center">{n.type === 'operator_request' ? '\uD83D\uDC68\u200D\u2022' : n.type === 'new_order' ? '\uD83D\DED2' : '\uD83D\uDD39'}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium text-white truncate flex items-center gap-2"><span className="truncate">{n.title}</span>{n.unread && <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />}</div>
-                      <div className="text-xs text-slate-400 truncate mt-0.5">{n.body}</div>
+                  <Link key={i} href={n.link || '/dashboard/notifications'} onClick={() => setNotifOpen(false)} className={'flex items-start gap-3 px-4 py-3.5 hover:bg-slate-800/50 transition-colors border-b border-slate-800/50 last:border-0 ' + (n.unread ? 'bg-indigo-500/5' : '')}>
+                    <span className="text-lg leading-none shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800/80 flex-shrink-0">{n.type === 'operator_request' ? '\uD83D\uDC68\u200D\u2022' : n.type === 'new_order' ? '\uD83D\DED2' : '\uD83D\uDD39'}</span>
+                    <div className="min-w-0 flex-1 flex flex-col gap-1">
+                      <div className="text-sm font-medium text-white flex items-center gap-2 min-w-0"><span className="truncate">{n.title}</span>{n.unread && <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0 flex-shrink-0" />}</div>
+                      <div className="text-xs text-slate-400 leading-relaxed break-words line-clamp-2">{n.body}</div>
                     </div>
                   </Link>
                 ))}
               </div>
               <div className="p-2 border-t border-slate-800 flex gap-2">
                 <Link href="/dashboard/inbox" onClick={() => setNotifOpen(false)} className="flex-1 text-center py-2 rounded-xl text-xs font-semibold bg-slate-800/60 hover:bg-slate-700 text-slate-300 transition-colors">Inbox</Link>
-                <Link href="/dashboard/orders" onClick={() => setNotifOpen(false)} className="flex-1 text-center py-2 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition-colors">Barchasini ko'rish</Link>
+                <Link href="/dashboard/notifications" onClick={() => setNotifOpen(false)} className="flex-1 text-center py-2 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition-colors">Barchasini ko'rish</Link>
               </div>
             </div>
           )}

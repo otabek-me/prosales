@@ -7,7 +7,7 @@ import re
 
 from app.database import get_db
 from app.models import User, Organization, Membership, RoleEnum, Plan, Subscription, SubscriptionStatusEnum, AISettings
-from app.schemas import UserCreate, UserLogin, UserResponse, Token, StandardResponse
+from app.schemas import UserCreate, UserLogin, UserResponse, UserUpdate, Token, StandardResponse
 from app.security import verify_password, get_password_hash, create_access_token, create_refresh_token
 from app.dependencies import get_current_user
 import logging
@@ -168,3 +168,18 @@ async def get_me(
             "organizations": org_list
         }
     )
+
+@router.put("/me", response_model=StandardResponse)
+async def update_me(
+    data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if data.full_name is not None and data.full_name.strip():
+        current_user.full_name = data.full_name.strip()
+    if data.phone is not None:
+        current_user.phone = data.phone.strip() or None
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+    return StandardResponse(success=True, data=UserResponse.model_validate(current_user))

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Loader2, PackageOpen, Phone, MapPin, User, Search, RefreshCw, Eye, CheckCircle2 } from 'lucide-react';
+import { ShoppingCart, Loader2, PackageOpen, Phone, User, Search, RefreshCw, Eye, CheckCircle2 } from 'lucide-react';
 import { apiGet, apiPut } from '@/lib/api';
 
 export default function OrdersPage() {
@@ -144,7 +144,6 @@ export default function OrdersPage() {
                   <th className="p-4 font-semibold">Buyurtma №</th>
                   <th className="p-4 font-semibold">Mahsulot nomi</th>
                   <th className="p-4 font-semibold">Mijoz ma&apos;lumotlari</th>
-                  <th className="p-4 font-semibold">Manzil</th>
                   <th className="p-4 font-semibold">Summa</th>
                   <th className="p-4 font-semibold">Status</th>
                   <th className="p-4 font-semibold">Sana</th>
@@ -182,12 +181,6 @@ export default function OrdersPage() {
                             {order.customer_phone}
                           </a>
                         )}
-                      </td>
-                      <td className="p-4 max-w-xs">
-                        <div className="text-xs text-slate-300 flex items-start gap-1">
-                          <MapPin className="w-3.5 h-3.5 text-slate-500 mt-0.5 flex-shrink-0" />
-                          <span className="truncate">{order.delivery_address || '-'}</span>
-                        </div>
                       </td>
                       <td className="p-4 font-bold text-emerald-400 whitespace-nowrap">
                         {Number(order.total_amount || 0).toLocaleString()} UZS

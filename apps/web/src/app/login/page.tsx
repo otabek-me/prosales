@@ -59,7 +59,7 @@ export default function LoginPage() {
         <div className="glass-panel rounded-xl p-8 relative z-10">
         {/* Logo */}
         <div className="flex justify-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-600/30 animate-float">
+          <div className="w-14 h-14 flex-shrink-0 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-600/30 animate-glow">
             <Sparkles className="w-7 h-7 text-white" />
           </div>
         </div>
