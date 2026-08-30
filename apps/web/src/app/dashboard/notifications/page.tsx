@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Bell, CheckCheck, Loader2, PackageOpen, Sparkles } from 'lucide-react';
 import { apiGet } from '@/lib/api';
+import { markAllNotificationsRead, isNotificationUnread } from '@/lib/notifications';
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);

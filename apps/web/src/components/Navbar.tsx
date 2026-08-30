@@ -9,6 +9,7 @@ import {
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { clearToken, apiGet, getOrgId } from '@/lib/api';
+import { getLastReadAt, markAllNotificationsRead, markNotificationRead, isNotificationUnread } from '@/lib/notifications';
 
 type SearchResults = {
   products: any[];
@@ -81,9 +82,10 @@ export default function Navbar() {
     try {
       const res = await apiGet('/meta/notifications');
       const data = res?.data || { items: [], unread_count: 0 };
-      setNotifications(data.items || []);
-      setNotificationCount(data.unread_count || 0);
-      const opReq = (data.items || []).filter((n: any) => n.type === 'operator_request' && n.unread).length;
+      const items: any[] = (data.items || []).map((n: any) => ({ ...n, unread: isNotificationUnread(n) }));
+      setNotifications(items);
+      setNotificationCount(items.filter((n: any) => n.unread).length);
+      const opReq = items.filter((n: any) => n.type === 'operator_request' && n.unread).length;
       setOperatorAlert(opReq);
     } catch {}
   }, []);
@@ -229,7 +231,7 @@ export default function Navbar() {
               <div className="p-3 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
                 <span className="text-sm font-bold text-white flex items-center gap-2"><Bell className="w-4 h-4 text-indigo-400" /> Bildirishnomalar</span>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => { setNotifications((prev: any) => prev.map((n: any) => ({ ...n, unread: false }))); setNotificationCount(0); setOperatorAlert(0); }} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors" title="Barchasini o'qilgan qilish"><CheckCheck className="w-4 h-4" /></button>
+                  <button onClick={() => { markAllNotificationsRead(); setNotifications((prev: any) => prev.map((n: any) => ({ ...n, unread: false }))); setNotificationCount(0); setOperatorAlert(0); }} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors" title="Barchasini o'qilgan qilish"><CheckCheck className="w-4 h-4" /></button>
                   <button onClick={() => setNotifOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" title="Yopish"><X className="w-4 h-4" /></button>
                 </div>
               </div>
@@ -253,7 +255,7 @@ export default function Navbar() {
                   notifications
                     .filter((n: any) => notifFilter === 'all' || (notifFilter === 'operator' ? n.type === 'operator_request' : n.type === 'new_order'))
                     .map((n: any, i: number) => (
-                      <Link key={i} href={n.link || '/dashboard/notifications'} onClick={() => setNotifOpen(false)} className={'flex items-start gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-colors border border-transparent ' + (n.unread ? 'bg-indigo-500/10 border-indigo-500/20' : '')}>
+                      <Link key={i} href={n.link || '/dashboard/notifications'} onClick={() => { markNotificationRead(n.created_at); setNotifOpen(false); loadNotifications(); }} className={'flex items-start gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-colors border border-transparent ' + (n.unread ? 'bg-indigo-500/10 border-indigo-500/20' : '')}>
                         <span className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg bg-slate-800 border border-slate-700/60">
                           {n.type === 'operator_request' ? <User className="w-4 h-4 text-amber-400" /> : n.type === 'new_order' ? <ShoppingCart className="w-4 h-4 text-emerald-400" /> : <Sparkles className="w-4 h-4 text-indigo-400" />}
                         </span>
