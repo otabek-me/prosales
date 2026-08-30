@@ -56,6 +56,7 @@ out/
 build_web/
 dist_web/
 next-env.d.ts
+*.tsbuildinfo
 
 # ===== ===== ===== ===== ===== ===== ===== ===== =====
 #  IDE / Editor
