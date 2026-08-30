@@ -102,7 +102,7 @@ async def help_handler(message: types.Message):
         "❓ *Ko'p beriladigan savollar:*\n\n"
         "🚚 *Yetkazib berish:* Toshkent shahri bo'ylab 30,000 so'm (1-2 kun ichida).\n"
         "💳 *To'lov turlari:* Naqd pul, Click va Payme.\n"
-        "🔄 *Qaytarish:* 14 kun ichida almashtirib beriladi.\n\n"
+        "🔄 *Qaytarish:* 34 kun ichida almashtirib beriladi.\n\n"
         "Har qanday boshqa savolingizni shunchaki yozib qoldiring!"
     )
     await message.answer(faq_text, parse_mode="Markdown")
