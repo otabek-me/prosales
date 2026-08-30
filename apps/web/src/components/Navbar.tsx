@@ -144,7 +144,7 @@ export default function Navbar() {
   }, []);
 
   return (
-    <header className="relative z-50 h-16 border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl px-4 flex items-center justify-between gap-4">
+    <header className="relative z-[100] h-16 border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl px-4 flex items-center justify-between gap-4">
       {/* Left: brand + quick nav */}
       <div className="flex items-center gap-3">
         <Link href="/dashboard" className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/50 transition-colors group">
@@ -210,7 +210,7 @@ export default function Navbar() {
             {notificationCount > 0 && (<span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-slate-900">{notificationCount > 99 ? '99+' : notificationCount}</span>)}
           </button>
           {notifOpen && (
-            <div className="absolute right-0 top-12 z-50 w-80 sm:w-96 rounded-2xl glass-panel border border-slate-700/60 shadow-2xl shadow-black/50 overflow-hidden animate-fade-in">
+            <div className="absolute right-0 top-12 z-[110] w-80 sm:w-96 rounded-2xl glass-panel border border-slate-700/60 shadow-2xl shadow-black/50 overflow-hidden animate-fade-in">
               <div className="p-3 border-b border-slate-800 flex items-center justify-between">
                 <span className="text-sm font-bold text-white flex items-center gap-2"><Bell className="w-4 h-4 text-indigo-400" /> Bildirishnomalar</span>
                 <div className="flex items-center gap-1">
@@ -248,7 +248,7 @@ export default function Navbar() {
             <ChevronDown className={'w-3.5 h-3.5 text-slate-500 transition-transform ' + (profileOpen ? 'rotate-180' : '')} />
           </button>
           {profileOpen && (
-            <div className="absolute right-0 top-12 z-50 w-64 rounded-2xl glass-panel border border-slate-700/60 shadow-2xl shadow-black/50 overflow-hidden animate-fade-in">
+            <div className="absolute right-0 top-12 z-[110] w-64 rounded-2xl glass-panel border border-slate-700/60 shadow-2xl shadow-black/50 overflow-hidden animate-fade-in">
               <div className="p-4 border-b border-slate-800 flex items-center gap-3 bg-gradient-to-br from-indigo-500/10 to-purple-500/5">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-bold text-base shadow-lg shrink-0">{profile ? initials : <User className="w-5 h-5" />}</div>
                 <div className="min-w-0"><div className="text-sm font-bold text-white truncate">{profile?.full_name || 'Foydalanuvchi'}</div><div className="text-xs text-indigo-300 truncate">{profile?.email || orgName || ''}</div></div>
