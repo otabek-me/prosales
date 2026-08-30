@@ -130,7 +130,7 @@ export default function DashboardOverview() {
                   <Icon className="w-5 h-5 text-white" />
                 </div>
               </div>
-              <div className="mt-4 flex items-baseline justify-between relative">
+                            <div className="mt-2 flex items-center justify-between relative">
                 <h3 className="text-2xl font-bold text-white font-display tracking-tight">{item.value}</h3>
               </div>
               <div className="mt-2 h-1 w-full bg-slate-800/50 rounded-full overflow-hidden relative">

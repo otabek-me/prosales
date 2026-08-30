@@ -144,7 +144,7 @@ export default function Navbar() {
   }, []);
 
   return (
-    <header className="relative z-[100] h-16 border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl px-4 flex items-center justify-between gap-4">
+        <header className="sticky top-0 z-40 w-full h-16 border-b border-slate-800/60 bg-[#0a0d14]/80 backdrop-blur-xl px-6 flex items-center justify-between">
       {/* Left: brand + quick nav */}
       <div className="flex items-center gap-3">
         <Link href="/dashboard" className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/50 transition-colors group">

@@ -35,11 +35,11 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 glass-panel h-screen fixed left-0 top-0 z-40 flex flex-col justify-between p-4 border-r border-slate-800 hidden md:flex">
+    <aside className="w-64 flex-shrink-0 h-full border-r border-slate-800/60 bg-[#0a0d14] flex flex-col justify-between p-4 hidden md:flex">
       <div>
         {/* Brand Logo */}
         <div className="flex items-center gap-3 px-2 py-3 mb-6 border-b border-slate-800">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 animate-float">
+          <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 animate-float">
             <Sparkles className="w-6 h-6 text-white" />
           </div>
           <div>
