@@ -209,7 +209,9 @@ async def execute_tool_call(
                 "currency": p.currency,
                 "stock": p.stock,
                 "description": (p.description or "")[:120],
-                "image_url": p.image_url
+                "image_url": p.image_url,
+                "media_count": len(p.media or []),
+                "has_video": any(m.get("type") == "video" for m in (p.media or []))
             })
         return json.dumps({"status": "success", "products": res_data}, ensure_ascii=False)
 
@@ -245,6 +247,8 @@ async def execute_tool_call(
                 "price": float(product.price),
                 "currency": product.currency,
                 "stock": product.stock,
+                "image_url": product.image_url,
+                "media": product.media or [],
                 "variants": variant_list
             }
         }, ensure_ascii=False)

@@ -27,78 +27,122 @@ class PaymentSubmitRequest(BaseModel):
     notes: Optional[str] = None
 
 
-DEFAULT_PLANS = [
-    {
-        "name": "Free Trial (Sinov)",
-        "slug": "free-trial",
-        "price_monthly": 0,
-        "limits_json": {"conversations": 50, "products": 5, "operators": 1, "ai_messages": 100},
-        "features_json": [
-            "14 kunlik bepul to'liq sinov",
-            "1 ta Telegram Bot ulash",
-            "5 tagacha mahsulot qo'shish",
-            "100 ta AI xabarlari",
-            "Jonli Live Inbox",
-            "Buyurtmalar boshqaruvi"
-        ]
-    },
-    {
-        "name": "Starter (Boshlang'ich)",
-        "slug": "starter",
-        "price_monthly": 150000,
-        "limits_json": {"conversations": 500, "products": 30, "operators": 2, "ai_messages": 2500},
-        "features_json": [
-            "Telegram Bot ulash",
-            "AI Sotuvchi (2,500 ta xabar)",
-            "30 tagacha mahsulotlar",
-            "Jonli Live Inbox va Operator rejimi",
-            "Buyurtmalarni to'liq boshqarish",
-            "Tezkor qidiruv va statistika"
-        ]
-    },
-    {
-        "name": "Business (Biznes)",
-        "slug": "business",
-        "price_monthly": 350000,
-        "limits_json": {"conversations": 3000, "products": 200, "operators": 5, "ai_messages": 15000},
-        "features_json": [
-            "Barcha Starter imkoniyatlari",
-            "AI Sotuvchi (15,000 ta xabar)",
-            "200 tagacha mahsulotlar",
-            "Tezkor AI javoblari",
-            "5 tagacha operatorlar",
-            "Kengaytirilgan savdo analitikasi"
-        ]
-    },
-    {
-        "name": "Pro (Cheksiz VIP)",
-        "slug": "pro",
-        "price_monthly": 700000,
-        "limits_json": {"conversations": 99999, "products": 99999, "operators": 99, "ai_messages": 999999},
-        "features_json": [
-            "Cheksiz mahsulotlar",
-            "Cheksiz AI xabarlari",
-            "Maxsus AI xulq-atvori va shaxsiy prompt",
-            "Prioritetli tezkor server",
-            "24/7 Shaxsiy menejer qo'llab-quvvatlashi"
-        ]
-    }
-]
+def get_configured_plans():
+    """Tariflar va ularning limitlarini .env (settings) orqali dinamik oladi."""
+    return [
+        {
+            "name": settings.PLAN_TRIAL_NAME,
+            "slug": "free-trial",
+            "price_monthly": settings.PLAN_TRIAL_PRICE,
+            "limits_json": {
+                "conversations": settings.PLAN_TRIAL_MAX_CONVERSATIONS,
+                "products": settings.PLAN_TRIAL_MAX_PRODUCTS,
+                "operators": 1,
+                "ai_messages": settings.PLAN_TRIAL_MAX_AI_MESSAGES,
+                "max_file_size_mb": settings.PLAN_TRIAL_MAX_FILE_SIZE_MB,
+                "max_media_per_product": settings.PLAN_TRIAL_MAX_MEDIA_PER_PRODUCT
+            },
+            "features_json": [
+                "14 kunlik bepul to'liq sinov",
+                "1 ta Telegram Bot ulash",
+                f"{settings.PLAN_TRIAL_MAX_PRODUCTS} tagacha mahsulot qo'shish",
+                f"{settings.PLAN_TRIAL_MAX_AI_MESSAGES} ta AI xabarlari",
+                f"Rasm va video yuklash ({settings.PLAN_TRIAL_MAX_FILE_SIZE_MB} MB gacha)",
+                "Jonli Live Inbox",
+                "Buyurtmalar boshqaruvi"
+            ]
+        },
+        {
+            "name": settings.PLAN_STARTER_NAME,
+            "slug": "starter",
+            "price_monthly": settings.PLAN_STARTER_PRICE,
+            "limits_json": {
+                "conversations": settings.PLAN_STARTER_MAX_CONVERSATIONS,
+                "products": settings.PLAN_STARTER_MAX_PRODUCTS,
+                "operators": 2,
+                "ai_messages": settings.PLAN_STARTER_MAX_AI_MESSAGES,
+                "max_file_size_mb": settings.PLAN_STARTER_MAX_FILE_SIZE_MB,
+                "max_media_per_product": settings.PLAN_STARTER_MAX_MEDIA_PER_PRODUCT
+            },
+            "features_json": [
+                "Telegram Bot ulash",
+                f"AI Sotuvchi ({int(settings.PLAN_STARTER_MAX_AI_MESSAGES):,} ta xabar)",
+                f"{settings.PLAN_STARTER_MAX_PRODUCTS} tagacha mahsulotlar",
+                f"Video va rasm yuklash ({settings.PLAN_STARTER_MAX_FILE_SIZE_MB} MB gacha)",
+                "Jonli Live Inbox va Operator rejimi",
+                "Buyurtmalarni to'liq boshqarish",
+                "Tezkor qidiruv va statistika"
+            ]
+        },
+        {
+            "name": settings.PLAN_BUSINESS_NAME,
+            "slug": "business",
+            "price_monthly": settings.PLAN_BUSINESS_PRICE,
+            "limits_json": {
+                "conversations": settings.PLAN_BUSINESS_MAX_CONVERSATIONS,
+                "products": settings.PLAN_BUSINESS_MAX_PRODUCTS,
+                "operators": 5,
+                "ai_messages": settings.PLAN_BUSINESS_MAX_AI_MESSAGES,
+                "max_file_size_mb": settings.PLAN_BUSINESS_MAX_FILE_SIZE_MB,
+                "max_media_per_product": settings.PLAN_BUSINESS_MAX_MEDIA_PER_PRODUCT
+            },
+            "features_json": [
+                "Barcha Starter imkoniyatlari",
+                f"AI Sotuvchi ({int(settings.PLAN_BUSINESS_MAX_AI_MESSAGES):,} ta xabar)",
+                f"{settings.PLAN_BUSINESS_MAX_PRODUCTS} tagacha mahsulotlar",
+                f"Katta HD video yuklash ({settings.PLAN_BUSINESS_MAX_FILE_SIZE_MB} MB gacha)",
+                "Tezkor AI javoblari",
+                "5 tagacha operatorlar",
+                "Kengaytirilgan savdo analitikasi"
+            ]
+        },
+        {
+            "name": settings.PLAN_PRO_NAME,
+            "slug": "pro",
+            "price_monthly": settings.PLAN_PRO_PRICE,
+            "limits_json": {
+                "conversations": settings.PLAN_PRO_MAX_CONVERSATIONS,
+                "products": settings.PLAN_PRO_MAX_PRODUCTS,
+                "operators": 99,
+                "ai_messages": settings.PLAN_PRO_MAX_AI_MESSAGES,
+                "max_file_size_mb": settings.PLAN_PRO_MAX_FILE_SIZE_MB,
+                "max_media_per_product": settings.PLAN_PRO_MAX_MEDIA_PER_PRODUCT
+            },
+            "features_json": [
+                "Cheksiz mahsulotlar",
+                "Cheksiz AI xabarlari",
+                f"Maksimal video/media hajmi ({settings.PLAN_PRO_MAX_FILE_SIZE_MB} MB gacha)",
+                "Maxsus AI xulq-atvori va shaxsiy prompt",
+                "Prioritetli tezkor server",
+                "24/7 Shaxsiy menejer qo'llab-quvvatlashi"
+            ]
+        }
+    ]
 
 
 async def _ensure_seed_plans(db: AsyncSession):
+    """Admin .env faylida narx yoki limitlarni o'zgartirganda bazadagi rejalarni ham yangilaydi."""
+    configured = get_configured_plans()
     res = await db.execute(select(Plan))
-    plans = res.scalars().all()
-    if not plans:
-        for p in DEFAULT_PLANS:
+    existing_plans = {p.slug: p for p in res.scalars().all()}
+
+    for cfg in configured:
+        p_slug = cfg["slug"]
+        if p_slug in existing_plans:
+            p = existing_plans[p_slug]
+            p.name = cfg["name"]
+            p.price_monthly = cfg["price_monthly"]
+            p.limits_json = cfg["limits_json"]
+            p.features_json = cfg["features_json"]
+        else:
             db.add(Plan(
-                name=p["name"],
-                slug=p["slug"],
-                price_monthly=p["price_monthly"],
-                limits_json=p["limits_json"],
-                features_json=p["features_json"]
+                name=cfg["name"],
+                slug=cfg["slug"],
+                price_monthly=cfg["price_monthly"],
+                limits_json=cfg["limits_json"],
+                features_json=cfg["features_json"]
             ))
-        await db.commit()
+    await db.commit()
 
 
 @router.get("/plans", response_model=StandardResponse)
@@ -199,7 +243,9 @@ async def get_current_subscription(
                 "products_count": current_products_count,
                 "products_limit": plan.limits_json.get("products", 5) if plan else 5,
                 "conversations_count": current_conv_count,
-                "conversations_limit": plan.limits_json.get("conversations", 50) if plan else 50
+                "conversations_limit": plan.limits_json.get("conversations", 50) if plan else 50,
+                "max_file_size_mb": plan.limits_json.get("max_file_size_mb", 15) if plan else 15,
+                "max_media_per_product": plan.limits_json.get("max_media_per_product", 3) if plan else 3
             }
         }
     )

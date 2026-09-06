@@ -79,6 +79,110 @@ async def send_chat_action(bot_token: str, chat_id: str, action: str = "typing")
         pass
 
 
+def _resolve_media_path(media_url_or_path: str) -> Optional[str]:
+    """Mahalliy uploads papkasidagi fayl yo'lini aniqlaydi."""
+    if not media_url_or_path:
+        return None
+    import os
+    clean = media_url_or_path.strip()
+    if clean.startswith("/uploads/"):
+        candidate = os.path.join(settings.UPLOAD_DIR, clean.replace("/uploads/", "", 1))
+        if os.path.exists(candidate):
+            return candidate
+    elif clean.startswith("uploads/"):
+        if os.path.exists(clean):
+            return clean
+    elif os.path.exists(clean):
+        return clean
+    return None
+
+
+async def send_telegram_photo(bot_token: str, chat_id: str, photo: str, caption: str = "", reply_markup: dict = None, parse_mode: Optional[str] = "Markdown") -> bool:
+    """Telegramga mahsulot rasmini yuboradi. Mahalliy fayl bo'lsa to'g'ridan-to'g'ri multipart yuklaydi."""
+    import os
+    import mimetypes
+    import json
+    url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+    local_path = _resolve_media_path(photo)
+
+    async with httpx.AsyncClient(timeout=25.0) as client:
+        try:
+            if local_path and os.path.exists(local_path):
+                filename = os.path.basename(local_path)
+                mime = mimetypes.guess_type(local_path)[0] or "image/jpeg"
+                with open(local_path, "rb") as f:
+                    file_content = f.read()
+                data = {"chat_id": chat_id, "caption": caption}
+                if parse_mode:
+                    data["parse_mode"] = parse_mode
+                if reply_markup:
+                    data["reply_markup"] = json.dumps(reply_markup)
+                files = {"photo": (filename, file_content, mime)}
+                res = await client.post(url, data=data, files=files)
+            else:
+                payload = {"chat_id": chat_id, "photo": photo, "caption": caption}
+                if parse_mode:
+                    payload["parse_mode"] = parse_mode
+                if reply_markup:
+                    payload["reply_markup"] = reply_markup
+                res = await client.post(url, json=payload)
+
+            if res.status_code != 200:
+                logger.warning(f"sendPhoto xatosi: {res.text}")
+                if caption:
+                    await send_telegram_message(bot_token, chat_id, caption, reply_markup, parse_mode)
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Telegramga rasm yuborishda xatolik: {e}")
+            if caption:
+                await send_telegram_message(bot_token, chat_id, caption, reply_markup, parse_mode)
+            return False
+
+
+async def send_telegram_video(bot_token: str, chat_id: str, video: str, caption: str = "", reply_markup: dict = None, parse_mode: Optional[str] = "Markdown") -> bool:
+    """Telegramga mahsulot videosini yuboradi. Mahalliy fayl bo'lsa to'g'ridan-to'g'ri multipart yuklaydi."""
+    import os
+    import mimetypes
+    import json
+    url = f"https://api.telegram.org/bot{bot_token}/sendVideo"
+    local_path = _resolve_media_path(video)
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        try:
+            if local_path and os.path.exists(local_path):
+                filename = os.path.basename(local_path)
+                mime = mimetypes.guess_type(local_path)[0] or "video/mp4"
+                with open(local_path, "rb") as f:
+                    file_content = f.read()
+                data = {"chat_id": chat_id, "caption": caption, "supports_streaming": "true"}
+                if parse_mode:
+                    data["parse_mode"] = parse_mode
+                if reply_markup:
+                    data["reply_markup"] = json.dumps(reply_markup)
+                files = {"video": (filename, file_content, mime)}
+                res = await client.post(url, data=data, files=files)
+            else:
+                payload = {"chat_id": chat_id, "video": video, "caption": caption, "supports_streaming": True}
+                if parse_mode:
+                    payload["parse_mode"] = parse_mode
+                if reply_markup:
+                    payload["reply_markup"] = reply_markup
+                res = await client.post(url, json=payload)
+
+            if res.status_code != 200:
+                logger.warning(f"sendVideo xatosi: {res.text}")
+                if caption:
+                    await send_telegram_message(bot_token, chat_id, caption, reply_markup, parse_mode)
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Telegramga video yuborishda xatolik: {e}")
+            if caption:
+                await send_telegram_message(bot_token, chat_id, caption, reply_markup, parse_mode)
+            return False
+
+
 async def send_telegram_message(bot_token: str, chat_id: str, text: str, reply_markup: dict = None, parse_mode: Optional[str] = "Markdown") -> bool:
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
@@ -381,6 +485,88 @@ async def telegram_webhook(
             db.add(conversation)
             await db.flush()
 
+        if cb_data == "catalog_list":
+            # Katalog ro'yxatini qayta chiqarish
+            prod_res = await db.execute(
+                select(Product).where(
+                    Product.organization_id == resolved_org_id,
+                    Product.is_active == True,
+                    Product.stock > 0
+                ).order_by(Product.created_at.desc()).limit(8)
+            )
+            products = prod_res.scalars().all()
+            if products:
+                catalog_text = "👟 *Do'konimizdagi mahsulotlar katalogi:*\n\n"
+                inline_buttons = []
+                for p in products:
+                    catalog_text += f"▪️ *{escape_markdown(p.name)}*\n"
+                    catalog_text += f"   💰 Narxi: *{float(p.price):,.0f} {p.currency}*\n"
+                    media_list = p.media or []
+                    has_img = bool(p.image_url or any(m.get("type") == "image" for m in media_list))
+                    has_vid = bool(any(m.get("type") == "video" for m in media_list))
+                    badges = []
+                    if has_img: badges.append("📷 Rasm")
+                    if has_vid: badges.append("🎥 Video")
+                    if badges:
+                        catalog_text += f"   ✨ _{' | '.join(badges)} mavjud_\n"
+                    catalog_text += "\n"
+
+                    row = []
+                    if has_img or has_vid:
+                        row.append({"text": f"👁 {p.name[:14]} Foto/Video", "callback_data": f"view_{str(p.id)[:8]}"})
+                    row.append({"text": f"🛒 {p.name[:14]} Buyurtma", "callback_data": f"buy_{str(p.id)[:8]}"})
+                    inline_buttons.append(row)
+
+                await send_telegram_message(plain_bot_token, cb_chat_id, catalog_text, {"inline_keyboard": inline_buttons})
+                return {"status": "handled_catalog_list"}
+
+        if cb_data.startswith("view_"):
+            prod_prefix = cb_data[5:]
+            prod_res = await db.execute(
+                select(Product).where(
+                    Product.organization_id == resolved_org_id,
+                    Product.is_active == True
+                )
+            )
+            all_prods = prod_res.scalars().all()
+            matched_prod = next((p for p in all_prods if str(p.id).startswith(prod_prefix)), None)
+
+            if matched_prod:
+                info_caption = (
+                    f"🛍 *{escape_markdown(matched_prod.name)}*\n\n"
+                    f"💰 Narxi: *{float(matched_prod.price):,.0f} {matched_prod.currency}*\n"
+                    f"📦 Zaxirada: {matched_prod.stock} dona\n"
+                )
+                if matched_prod.description:
+                    info_caption += f"\n📝 {escape_markdown(matched_prod.description)}\n"
+
+                order_markup = {
+                    "inline_keyboard": [
+                        [{"text": f"🛒 Buyurtma berish ({float(matched_prod.price):,.0f} {matched_prod.currency})", "callback_data": f"buy_{str(matched_prod.id)[:8]}"}],
+                        [{"text": "👟 Barcha mahsulotlar", "callback_data": "catalog_list"}]
+                    ]
+                }
+
+                media_list = matched_prod.media or []
+                images = [m["url"] for m in media_list if m.get("type") == "image"]
+                videos = [m["url"] for m in media_list if m.get("type") == "video"]
+
+                if not images and matched_prod.image_url:
+                    images.append(matched_prod.image_url)
+
+                # 1. Rasm yuborish
+                if images:
+                    await send_telegram_photo(plain_bot_token, cb_chat_id, images[0], caption=info_caption, reply_markup=order_markup)
+                else:
+                    await send_telegram_message(plain_bot_token, cb_chat_id, info_caption, order_markup)
+
+                # 2. Videolar bo'lsa, ularni ham yuborish
+                for vid_url in videos:
+                    vid_caption = f"🎥 *{escape_markdown(matched_prod.name)}* videosi"
+                    await send_telegram_video(plain_bot_token, cb_chat_id, vid_url, caption=vid_caption)
+
+                return {"status": "handled_inline_view"}
+
         if cb_data.startswith("buy_"):
             prod_prefix = cb_data[4:]
             prod_res = await db.execute(
@@ -404,7 +590,23 @@ async def telegram_webhook(
                     f"💰 Narxi: *{float(matched_prod.price):,.0f} {matched_prod.currency}*\n\n"
                     "🔢 *Nechta dona buyurtma qilmoqchisiz?* (masalan: 1, 2):"
                 )
-                await send_telegram_message(plain_bot_token, cb_chat_id, ask_text, MAIN_KEYBOARD)
+
+                # Agar rasm bo'lsa, xaridorni qiziqtirish uchun rasm bilan yuboramiz
+                media_list = matched_prod.media or []
+                images = [m["url"] for m in media_list if m.get("type") == "image"]
+                if not images and matched_prod.image_url:
+                    images.append(matched_prod.image_url)
+
+                if images:
+                    await send_telegram_photo(plain_bot_token, cb_chat_id, images[0], caption=ask_text, reply_markup=MAIN_KEYBOARD)
+                else:
+                    await send_telegram_message(plain_bot_token, cb_chat_id, ask_text, MAIN_KEYBOARD)
+
+                # Agar video bo'lsa, uni ham ko'rsatamiz
+                videos = [m["url"] for m in media_list if m.get("type") == "video"]
+                for vid_url in videos:
+                    await send_telegram_video(plain_bot_token, cb_chat_id, vid_url, caption=f"🎥 *{escape_markdown(matched_prod.name)}* videosi")
+
                 return {"status": "handled_inline_buy"}
 
     # 3. ODDIY XABARLARNI QABUL QILISH
@@ -636,10 +838,23 @@ async def telegram_webhook(
                     catalog_text += f"   💰 Narxi: *{float(p.price):,.0f} {p.currency}*\n"
                     if p.description:
                         catalog_text += f"   📝 _{escape_markdown(p.description[:70])}_\n"
+                    media_list = p.media or []
+                    has_img = bool(p.image_url or any(m.get("type") == "image" for m in media_list))
+                    has_vid = bool(any(m.get("type") == "video" for m in media_list))
+                    badges = []
+                    if has_img: badges.append("📷 Rasm")
+                    if has_vid: badges.append("🎥 Video")
+                    if badges:
+                        catalog_text += f"   ✨ _{' | '.join(badges)} mavjud_\n"
                     catalog_text += "\n"
-                    inline_buttons.append([{"text": f"🛒 {p.name[:25]} — Buyurtma", "callback_data": f"buy_{str(p.id)[:8]}"}])
 
-                catalog_text += "💡 _Buyurtma qilish uchun mahsulot tugmasini bosing yoki nomini yozing._"
+                    row = []
+                    if has_img or has_vid:
+                        row.append({"text": f"👁 {p.name[:14]} Foto/Video", "callback_data": f"view_{str(p.id)[:8]}"})
+                    row.append({"text": f"🛒 {p.name[:14]} Buyurtma", "callback_data": f"buy_{str(p.id)[:8]}"})
+                    inline_buttons.append(row)
+
+                catalog_text += "💡 _Buyurtma qilish uchun tugmani bosing yoki mahsulot nomini yozing._"
                 reply_markup = {"inline_keyboard": inline_buttons} if inline_buttons else MAIN_KEYBOARD
                 await send_telegram_message(plain_bot_token, chat_id, catalog_text, reply_markup)
                 return {"status": "handled_products"}

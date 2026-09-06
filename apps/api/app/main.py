@@ -1,14 +1,16 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import logging
 import json
+import os
 
 from app.config import settings
 from app.database import engine, Base
 from app.routers import (
     auth, organizations, bots, products, orders, customers,
-    conversations, knowledge, analytics, subscriptions, superadmin, webhook, meta
+    conversations, knowledge, analytics, subscriptions, superadmin, webhook, meta, uploads
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -94,9 +96,15 @@ app.include_router(analytics.router, prefix=v1)
 app.include_router(subscriptions.router, prefix=v1)
 app.include_router(superadmin.router, prefix=v1)
 app.include_router(meta.router, prefix=v1)
+app.include_router(uploads.router, prefix=v1)
 app.include_router(webhook.router, prefix=v1)
 # Also mount webhook at root /webhook for backward compatibility
 app.include_router(webhook.router)
+
+# Mount static files for media uploads (rasm va videolarni streaming/brauzerda ko'rish uchun)
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+os.makedirs(os.path.join(settings.UPLOAD_DIR, "products"), exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 
 async def _ensure_column(conn, dialect, table, column, sqlite_type, pg_type):
@@ -131,6 +139,8 @@ async def _run_lightweight_migrations(conn) -> None:
     await _ensure_column(conn, dialect, "customers", "draft_product_id", "CHAR(32)", "UUID")
     # Buyurtma zaxirasi ayirilganligi bayrog'i (idempotent stock boshqaruvi).
     await _ensure_column(conn, dialect, "orders", "stock_deducted", "BOOLEAN", "BOOLEAN")
+    # Mahsulot media (rasmlar va videolar ro'yxati).
+    await _ensure_column(conn, dialect, "products", "media", "JSON DEFAULT '[]'", "JSONB DEFAULT '[]'::jsonb")
 
 
 @app.on_event("startup")

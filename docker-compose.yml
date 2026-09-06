@@ -36,6 +36,8 @@ services:
       - BOT_TOKEN=${BOT_TOKEN}
       - DEFAULT_AI_MODEL=${DEFAULT_AI_MODEL:-llama-3.3-70b-versatile}
       - TELEGRAM_WEBHOOK_DOMAIN=${TELEGRAM_WEBHOOK_DOMAIN:-http://localhost:8000}
+    volumes:
+      - ./apps/api/uploads:/app/uploads
     ports:
       - "8001:8000"
     depends_on:

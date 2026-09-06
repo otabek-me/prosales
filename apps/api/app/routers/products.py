@@ -148,6 +148,13 @@ async def create_product(
                     status_code=403,
                     detail=f"Sizning tarifingizda mahsulotlar soni cheklangan ({limit} ta). Ko'proq mahsulot qo'shish uchun tarifingizni yangilang!"
                 )
+        if plan and plan.limits_json and "max_media_per_product" in plan.limits_json:
+            max_media = plan.limits_json["max_media_per_product"]
+            if len(data.media or []) > max_media:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Sizning tarifingizda bitta mahsulotga ko'pi bilan {max_media} ta rasm/video yuklash mumkin. Ko'proq media yuklash uchun tarifingizni yangilang!"
+                )
 
     sku_final = data.sku.strip() if data.sku and data.sku.strip() else generate_default_sku(data.name)
 
@@ -158,6 +165,13 @@ async def create_product(
             raise HTTPException(status_code=409, detail="Bu SKU kod allaqachon ishlatilgan. Boshqa SKU kiriting!")
         sku_final = generate_default_sku(f"{data.name} {uuid.uuid4().hex[:4]}")
 
+    # Asosiy rasm: agar image_url berilmagan bo'lsa, yuklangan medialardan birinchi rasmni olamiz
+    media_list = data.media or []
+    image_url_final = data.image_url
+    if not image_url_final and media_list:
+        first_img = next((m.get("url") for m in media_list if m.get("type") == "image"), None)
+        image_url_final = first_img or (media_list[0].get("url") if media_list else None)
+
     product = Product(
         organization_id=org_id,
         category_id=data.category_id,
@@ -167,7 +181,8 @@ async def create_product(
         price=data.price,
         currency=data.currency,
         stock=data.stock,
-        image_url=data.image_url,
+        image_url=image_url_final,
+        media=media_list,
         tags=data.tags
     )
     db.add(product)
@@ -235,6 +250,12 @@ async def update_product(
         product.currency = data.currency
     if data.stock is not None:
         product.stock = data.stock
+    if data.media is not None:
+        product.media = data.media
+        if not data.image_url and data.media:
+            first_img = next((m.get("url") for m in data.media if m.get("type") == "image"), None)
+            if first_img:
+                product.image_url = first_img
     if data.image_url is not None:
         product.image_url = data.image_url
     if data.category_id is not None:

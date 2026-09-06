@@ -226,6 +226,7 @@ class Product(Base):
     currency = Column(String(10), default="UZS", nullable=False)
     stock = Column(Integer, default=0, nullable=False)
     image_url = Column(Text, nullable=True)
+    media = Column(JSONB, default=list, nullable=False)  # [{"url": "...", "type": "image"|"video", "filename": "...", "size_bytes": 123}]
     tags = Column(JSONB, default=list, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

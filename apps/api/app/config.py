@@ -48,6 +48,43 @@ class Settings(BaseSettings):
     PAYMENT_CARD_NUMBER: str = os.getenv("PAYMENT_CARD_NUMBER", "9860 3501 2345 6789")
     PAYMENT_CARD_HOLDER: str = os.getenv("PAYMENT_CARD_HOLDER", "OTABEK R.")
     PAYMENT_CARD_BANK: str = os.getenv("PAYMENT_CARD_BANK", "Humo / Uzcard")
+
+    # Storage & Uploads
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "uploads")
+    API_PUBLIC_BASE_URL: str = os.getenv("API_PUBLIC_BASE_URL", "http://localhost:8000")
+
+    # Subscription Plans & Limits (admin .env orqali narxlar va limitlarni boshqaradi)
+    PLAN_TRIAL_NAME: str = os.getenv("PLAN_TRIAL_NAME", "Free Trial (Sinov)")
+    PLAN_TRIAL_PRICE: float = float(os.getenv("PLAN_TRIAL_PRICE", "0"))
+    PLAN_TRIAL_MAX_PRODUCTS: int = int(os.getenv("PLAN_TRIAL_MAX_PRODUCTS", "5"))
+    PLAN_TRIAL_MAX_CONVERSATIONS: int = int(os.getenv("PLAN_TRIAL_MAX_CONVERSATIONS", "50"))
+    PLAN_TRIAL_MAX_AI_MESSAGES: int = int(os.getenv("PLAN_TRIAL_MAX_AI_MESSAGES", "100"))
+    PLAN_TRIAL_MAX_FILE_SIZE_MB: int = int(os.getenv("PLAN_TRIAL_MAX_FILE_SIZE_MB", "15"))
+    PLAN_TRIAL_MAX_MEDIA_PER_PRODUCT: int = int(os.getenv("PLAN_TRIAL_MAX_MEDIA_PER_PRODUCT", "3"))
+
+    PLAN_STARTER_NAME: str = os.getenv("PLAN_STARTER_NAME", "Starter (Boshlang'ich)")
+    PLAN_STARTER_PRICE: float = float(os.getenv("PLAN_STARTER_PRICE", "150000"))
+    PLAN_STARTER_MAX_PRODUCTS: int = int(os.getenv("PLAN_STARTER_MAX_PRODUCTS", "30"))
+    PLAN_STARTER_MAX_CONVERSATIONS: int = int(os.getenv("PLAN_STARTER_MAX_CONVERSATIONS", "500"))
+    PLAN_STARTER_MAX_AI_MESSAGES: int = int(os.getenv("PLAN_STARTER_MAX_AI_MESSAGES", "2500"))
+    PLAN_STARTER_MAX_FILE_SIZE_MB: int = int(os.getenv("PLAN_STARTER_MAX_FILE_SIZE_MB", "35"))
+    PLAN_STARTER_MAX_MEDIA_PER_PRODUCT: int = int(os.getenv("PLAN_STARTER_MAX_MEDIA_PER_PRODUCT", "5"))
+
+    PLAN_BUSINESS_NAME: str = os.getenv("PLAN_BUSINESS_NAME", "Business (Biznes)")
+    PLAN_BUSINESS_PRICE: float = float(os.getenv("PLAN_BUSINESS_PRICE", "350000"))
+    PLAN_BUSINESS_MAX_PRODUCTS: int = int(os.getenv("PLAN_BUSINESS_MAX_PRODUCTS", "200"))
+    PLAN_BUSINESS_MAX_CONVERSATIONS: int = int(os.getenv("PLAN_BUSINESS_MAX_CONVERSATIONS", "3000"))
+    PLAN_BUSINESS_MAX_AI_MESSAGES: int = int(os.getenv("PLAN_BUSINESS_MAX_AI_MESSAGES", "15000"))
+    PLAN_BUSINESS_MAX_FILE_SIZE_MB: int = int(os.getenv("PLAN_BUSINESS_MAX_FILE_SIZE_MB", "100"))
+    PLAN_BUSINESS_MAX_MEDIA_PER_PRODUCT: int = int(os.getenv("PLAN_BUSINESS_MAX_MEDIA_PER_PRODUCT", "10"))
+
+    PLAN_PRO_NAME: str = os.getenv("PLAN_PRO_NAME", "Pro (Cheksiz VIP)")
+    PLAN_PRO_PRICE: float = float(os.getenv("PLAN_PRO_PRICE", "700000"))
+    PLAN_PRO_MAX_PRODUCTS: int = int(os.getenv("PLAN_PRO_MAX_PRODUCTS", "99999"))
+    PLAN_PRO_MAX_CONVERSATIONS: int = int(os.getenv("PLAN_PRO_MAX_CONVERSATIONS", "99999"))
+    PLAN_PRO_MAX_AI_MESSAGES: int = int(os.getenv("PLAN_PRO_MAX_AI_MESSAGES", "999999"))
+    PLAN_PRO_MAX_FILE_SIZE_MB: int = int(os.getenv("PLAN_PRO_MAX_FILE_SIZE_MB", "500"))
+    PLAN_PRO_MAX_MEDIA_PER_PRODUCT: int = int(os.getenv("PLAN_PRO_MAX_MEDIA_PER_PRODUCT", "25"))
     
     class Config:
         case_sensitive = True

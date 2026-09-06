@@ -118,6 +118,7 @@ class ProductCreate(BaseModel):
     currency: str = "UZS"
     stock: int = 0
     image_url: Optional[str] = None
+    media: Optional[List[Dict[str, Any]]] = []
     tags: List[str] = []
     variants: List[ProductVariantCreate] = []
 
@@ -130,6 +131,7 @@ class ProductUpdate(BaseModel):
     currency: Optional[str] = None
     stock: Optional[int] = None
     image_url: Optional[str] = None
+    media: Optional[List[Dict[str, Any]]] = None
     tags: Optional[List[str]] = None
     is_active: Optional[bool] = None
 
@@ -144,6 +146,7 @@ class ProductResponse(BaseModel):
     currency: str
     stock: int
     image_url: Optional[str] = None
+    media: List[Dict[str, Any]] = []
     tags: List[str]
     is_active: bool
     variants: List[ProductVariantResponse] = []
