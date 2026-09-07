@@ -278,6 +278,7 @@ export default function ProductsCatalog() {
     if (!confirm(`"${name}" mahsulotini o'chirishni tasdiqlaysizmi?`)) return;
     try {
       await apiDelete(`/products/${id}`);
+      setProducts(prev => prev.filter(p => p.id !== id));
       setSuccess("Mahsulot o'chirildi.");
       setTimeout(() => setSuccess(''), 3000);
       await loadData(false);
@@ -287,6 +288,7 @@ export default function ProductsCatalog() {
   };
 
   const filtered = products.filter(p => {
+    if (p.is_active === false) return false;
     const matchesSearch = p.name?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = !selectedCategory || p.category_id === selectedCategory;
     return matchesSearch && matchesCategory;
@@ -520,36 +522,39 @@ export default function ProductsCatalog() {
 
       {/* Add / Edit Product Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="w-full max-w-2xl glass-panel rounded-2xl p-6 border border-slate-700 shadow-2xl space-y-4 my-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-fade-in">
+          <div className="relative w-full max-w-2xl bg-[#0b0f19] border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 flex flex-col max-h-[92vh] overflow-hidden">
+            {/* Modal Header (Fixed) */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#0f1422] shrink-0">
+              <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                 <ShoppingBag className="w-5 h-5 text-indigo-400" />
                 {editingProduct ? 'Mahsulotni Tahrirlash' : 'Yangi Mahsulot Qo\'shish'}
               </h3>
               <button
                 onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-white"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Yopish"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {error && (
-              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
+            {/* Modal Body (Scrollable) */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 overscroll-contain text-xs">
+              {error && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
 
-            <div className="space-y-4 text-xs">
               {/* Product Name */}
               <div>
                 <label className="text-slate-300 font-semibold mb-1 block">Mahsulot nomi *</label>
                 <input
                   value={formData.name}
                   onChange={(e) => handleNameChange(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white focus:outline-none focus:border-indigo-500 text-sm"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-white focus:outline-none focus:border-indigo-500 text-sm"
                   placeholder="Masalan: Nike Air Jordan 4 Retro"
                 />
               </div>
@@ -568,7 +573,7 @@ export default function ProductsCatalog() {
                     setIsSkuManuallyEdited(true);
                     setFormData({ ...formData, sku: e.target.value.toUpperCase() });
                   }}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-indigo-300 font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-indigo-300 font-mono focus:outline-none focus:border-indigo-500"
                   placeholder="NIK-AIR-JOR-8921"
                 />
               </div>
@@ -581,7 +586,7 @@ export default function ProductsCatalog() {
                     type="number"
                     value={formData.price}
                     onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white focus:outline-none focus:border-indigo-500 font-bold"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-white focus:outline-none focus:border-indigo-500 font-bold text-sm"
                     placeholder="450000"
                   />
                 </div>
@@ -591,7 +596,7 @@ export default function ProductsCatalog() {
                     type="number"
                     value={formData.stock}
                     onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-white focus:outline-none focus:border-indigo-500 text-sm"
                     placeholder="10"
                   />
                 </div>
@@ -604,7 +609,7 @@ export default function ProductsCatalog() {
                   <select
                     value={formData.category_id}
                     onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-white focus:outline-none focus:border-indigo-500"
                   >
                     <option value="">Kategoriyasiz</option>
                     {categories.map((c) => (
@@ -620,14 +625,14 @@ export default function ProductsCatalog() {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white focus:outline-none focus:border-indigo-500 resize-none"
-                  rows={2}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-white focus:outline-none focus:border-indigo-500 resize-none leading-relaxed"
+                  rows={3}
                   placeholder="Materiali, rangi, o'lchamlari va afzalliklari..."
                 />
               </div>
 
               {/* MEDIA UPLOAD SECTION (Photos and playable Videos) */}
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+              <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1">
                   <div>
                     <label className="text-slate-200 font-bold flex items-center gap-1.5 text-xs">
@@ -637,7 +642,7 @@ export default function ProductsCatalog() {
                       Yuklangan media fayllar Telegram botda mijozlarga to&apos;g&apos;ridan-to&apos;g&apos;ri ko&apos;rsatiladi.
                     </p>
                   </div>
-                  <div className="text-[10px] text-indigo-300 bg-indigo-950/60 border border-indigo-500/30 px-2 py-1 rounded-md">
+                  <div className="text-[10px] text-indigo-300 bg-indigo-950/80 border border-indigo-500/30 px-2.5 py-1 rounded-md">
                     Limit: {maxFileSizeMb} MB gacha | Max: {maxMediaCount} ta
                   </div>
                 </div>
@@ -671,7 +676,7 @@ export default function ProductsCatalog() {
                 {uploadingFiles.length > 0 && (
                   <div className="space-y-2 pt-2 border-t border-slate-800">
                     {uploadingFiles.map((uf, idx) => (
-                      <div key={idx} className="p-2.5 rounded-lg bg-slate-800/70 border border-slate-700 space-y-1.5">
+                      <div key={idx} className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 space-y-1.5">
                         <div className="flex justify-between items-center text-[11px]">
                           <span className="text-white font-medium truncate max-w-[200px] flex items-center gap-1.5">
                             <Loader2 className="w-3 h-3 text-indigo-400 animate-spin" /> {uf.name}
@@ -704,7 +709,7 @@ export default function ProductsCatalog() {
                         return (
                           <div
                             key={idx}
-                            className="relative group rounded-xl overflow-hidden border border-slate-700 bg-slate-800/80 flex flex-col justify-between"
+                            className="relative group rounded-xl overflow-hidden border border-slate-700 bg-slate-800/90 flex flex-col justify-between"
                           >
                             {isVideo ? (
                               <div className="relative w-full h-28 bg-black flex items-center justify-center">
@@ -763,21 +768,21 @@ export default function ProductsCatalog() {
                     id="is_active_toggle"
                     checked={formData.is_active}
                     onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                   />
-                  <label htmlFor="is_active_toggle" className="text-slate-300 font-medium cursor-pointer">
+                  <label htmlFor="is_active_toggle" className="text-slate-300 font-medium cursor-pointer select-none">
                     Mahsulot sotuvda faol (AI mijozlarga taklif qilsin)
                   </label>
                 </div>
               )}
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-3 pt-3 border-t border-slate-800">
+            {/* Action Buttons (Fixed Footer) */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-800 bg-[#0f1422] shrink-0">
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors"
+                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors"
               >
                 Bekor qilish
               </button>
@@ -785,10 +790,10 @@ export default function ProductsCatalog() {
                 type="button"
                 onClick={handleSaveProduct}
                 disabled={saving || !formData.name.trim() || !formData.price || uploadingFiles.length > 0}
-                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                {editingProduct ? 'Saqlash' : 'Mahsulotni Qo\'shish'}
+                {editingProduct ? 'O\'zgarishlarni Saqlash' : 'Mahsulotni Qo\'shish'}
               </button>
             </div>
           </div>
@@ -797,11 +802,12 @@ export default function ProductsCatalog() {
 
       {/* Product Details & Video Player Modal */}
       {viewingProduct && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="w-full max-w-2xl glass-panel rounded-2xl p-6 border border-slate-700 shadow-2xl space-y-5 my-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-fade-in">
+          <div className="relative w-full max-w-2xl bg-[#0b0f19] border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 flex flex-col max-h-[92vh] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#0f1422] shrink-0">
               <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                   <ShoppingBag className="w-5 h-5 text-indigo-400" />
                   {viewingProduct.name}
                 </h3>
@@ -811,115 +817,120 @@ export default function ProductsCatalog() {
               </div>
               <button
                 onClick={() => setViewingProduct(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Yopish"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Media Gallery (Playable Video + High-Res Photos) */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <PlayCircle className="w-4 h-4 text-purple-400" /> Mahsulot Video va Rasmlari
-              </h4>
+            {/* Body */}
+            <div className="p-6 overflow-y-auto space-y-5 flex-1 overscroll-contain">
+              {/* Media Gallery (Playable Video + High-Res Photos) */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <PlayCircle className="w-4 h-4 text-purple-400" /> Mahsulot Video va Rasmlari
+                </h4>
 
-              {(!viewingProduct.media || viewingProduct.media.length === 0) && !viewingProduct.image_url ? (
-                <div className="p-6 text-center text-xs text-slate-500 bg-slate-900/50 rounded-xl border border-slate-800">
-                  Ushbu mahsulotga hali rasm yoki video yuklanmagan.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Videos section */}
-                  {Array.isArray(viewingProduct.media) && viewingProduct.media.filter((m: any) => m.type === 'video').map((vid: any, vIdx: number) => (
-                    <div key={vIdx} className="rounded-xl overflow-hidden border border-purple-500/30 bg-black shadow-xl">
-                      <div className="p-2 bg-purple-950/60 border-b border-purple-900/40 text-[11px] font-semibold text-purple-300 flex items-center gap-1.5">
-                        <Film className="w-3.5 h-3.5" /> Video {vIdx + 1}: {vid.filename || 'Mahsulot videosi'}
-                      </div>
-                      <video
-                        src={getFileUrl(vid.url)}
-                        controls
-                        controlsList="nodownload"
-                        className="w-full max-h-80 object-contain bg-black"
-                        preload="metadata"
-                      />
-                    </div>
-                  ))}
-
-                  {/* Images section */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {/* Primary Image */}
-                    {viewingProduct.image_url && (
-                      <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900 h-36">
-                        <img
-                          src={getFileUrl(viewingProduct.image_url)}
-                          alt={viewingProduct.name}
-                          className="w-full h-full object-cover"
-                        />
-                        <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded">
-                          Asosiy rasm
-                        </span>
-                      </div>
-                    )}
-                    {/* Additional Images from media */}
-                    {Array.isArray(viewingProduct.media) && viewingProduct.media.filter((m: any) => m.type === 'image' && m.url !== viewingProduct.image_url).map((img: any, iIdx: number) => (
-                      <div key={iIdx} className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900 h-36">
-                        <img
-                          src={getFileUrl(img.url)}
-                          alt={img.filename || viewingProduct.name}
-                          className="w-full h-full object-cover"
+                {(!viewingProduct.media || viewingProduct.media.length === 0) && !viewingProduct.image_url ? (
+                  <div className="p-6 text-center text-xs text-slate-500 bg-slate-900/50 rounded-xl border border-slate-800">
+                    Ushbu mahsulotga hali rasm yoki video yuklanmagan.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Videos section */}
+                    {Array.isArray(viewingProduct.media) && viewingProduct.media.filter((m: any) => m.type === 'video').map((vid: any, vIdx: number) => (
+                      <div key={vIdx} className="rounded-xl overflow-hidden border border-purple-500/30 bg-black shadow-xl">
+                        <div className="p-2 bg-purple-950/60 border-b border-purple-900/40 text-[11px] font-semibold text-purple-300 flex items-center gap-1.5">
+                          <Film className="w-3.5 h-3.5" /> Video {vIdx + 1}: {vid.filename || 'Mahsulot videosi'}
+                        </div>
+                        <video
+                          src={getFileUrl(vid.url)}
+                          controls
+                          controlsList="nodownload"
+                          className="w-full max-h-80 object-contain bg-black"
+                          preload="metadata"
                         />
                       </div>
                     ))}
+
+                    {/* Images section */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {/* Primary Image */}
+                      {viewingProduct.image_url && (
+                        <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900 h-36">
+                          <img
+                            src={getFileUrl(viewingProduct.image_url)}
+                            alt={viewingProduct.name}
+                            className="w-full h-full object-cover"
+                          />
+                          <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded">
+                            Asosiy rasm
+                          </span>
+                        </div>
+                      )}
+                      {/* Additional Images from media */}
+                      {Array.isArray(viewingProduct.media) && viewingProduct.media.filter((m: any) => m.type === 'image' && m.url !== viewingProduct.image_url).map((img: any, iIdx: number) => (
+                        <div key={iIdx} className="relative rounded-xl overflow-hidden border border-slate-700 bg-slate-900 h-36">
+                          <img
+                            src={getFileUrl(img.url)}
+                            alt={img.filename || viewingProduct.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                )}
+              </div>
+
+              {/* Product Details Specs */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <span className="text-slate-400 block text-[11px]">Narxi:</span>
+                  <span className="text-base font-extrabold text-emerald-400 mt-0.5 block">
+                    {Number(viewingProduct.price || 0).toLocaleString()} UZS
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <span className="text-slate-400 block text-[11px]">Mavjud zaxira:</span>
+                  <span className="text-base font-bold text-white mt-0.5 block">
+                    {viewingProduct.stock || 0} dona
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <span className="text-slate-400 block text-[11px]">Holat:</span>
+                  <span className="text-sm font-bold text-emerald-400 mt-0.5 block">
+                    {viewingProduct.is_active !== false ? '✅ Sotuvda faol' : '❌ Nofaol'}
+                  </span>
+                </div>
+              </div>
+
+              {viewingProduct.description && (
+                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs">
+                  <span className="text-slate-400 block text-[11px] mb-1 font-semibold">Tavsif:</span>
+                  <p className="text-slate-200 leading-relaxed">{viewingProduct.description}</p>
                 </div>
               )}
             </div>
 
-            {/* Product Details Specs */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 text-xs">
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-                <span className="text-slate-400 block text-[11px]">Narxi:</span>
-                <span className="text-base font-extrabold text-emerald-400 mt-0.5 block">
-                  {Number(viewingProduct.price || 0).toLocaleString()} UZS
-                </span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-                <span className="text-slate-400 block text-[11px]">Mavjud zaxira:</span>
-                <span className="text-base font-bold text-white mt-0.5 block">
-                  {viewingProduct.stock || 0} dona
-                </span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-                <span className="text-slate-400 block text-[11px]">Holat:</span>
-                <span className="text-sm font-bold text-emerald-400 mt-0.5 block">
-                  {viewingProduct.is_active !== false ? '✅ Sotuvda faol' : '❌ Nofaol'}
-                </span>
-              </div>
-            </div>
-
-            {viewingProduct.description && (
-              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs">
-                <span className="text-slate-400 block text-[11px] mb-1 font-semibold">Tavsif:</span>
-                <p className="text-slate-200 leading-relaxed">{viewingProduct.description}</p>
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-2">
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-800 bg-[#0f1422] shrink-0">
+              <button
+                onClick={() => setViewingProduct(null)}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+              >
+                Yopish
+              </button>
               <button
                 onClick={() => {
                   const prod = viewingProduct;
                   setViewingProduct(null);
                   openEditModal(prod);
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/30"
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/30"
               >
                 <Edit3 className="w-4 h-4" /> Tahrirlash
-              </button>
-              <button
-                onClick={() => setViewingProduct(null)}
-                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-              >
-                Yopish
               </button>
             </div>
           </div>

@@ -107,10 +107,13 @@ async def list_products_public(
 async def list_products(
     search: Optional[str] = None,
     category_id: Optional[UUID] = None,
+    include_inactive: bool = False,
     org_id: UUID = Depends(get_current_organization_id),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(Product).where(Product.organization_id == org_id)
+    if not include_inactive:
+        stmt = stmt.where(Product.is_active == True)
     if search:
         stmt = stmt.where(
             or_(
@@ -282,7 +285,21 @@ async def delete_product(
     if not product:
         raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
 
-    product.is_active = False
-    await db.commit()
-    return StandardResponse(success=True, data={"message": "Mahsulot o'chirildi"})
+    # Ushbu mahsulot buyurtmalarda mavjudligini tekshirish
+    from app.models import OrderItem
+    order_items_res = await db.execute(
+        select(OrderItem).where(OrderItem.product_id == product_id).limit(1)
+    )
+    has_orders = order_items_res.scalars().first() is not None
+
+    if has_orders:
+        # Buyurtma tarixi buzilmasligi uchun soft-delete qilamiz
+        product.is_active = False
+        await db.commit()
+        return StandardResponse(success=True, data={"message": "Mahsulot arxivlandi (buyurtmalar tarixi mavjud)"})
+    else:
+        # Hech qanday buyurtmada ishlatilmagan bo'lsa, butunlay bazadan o'chiramiz
+        await db.delete(product)
+        await db.commit()
+        return StandardResponse(success=True, data={"message": "Mahsulot muvaffaqiyatli o'chirildi"})
 
