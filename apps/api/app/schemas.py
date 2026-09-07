@@ -269,6 +269,9 @@ class AISettingsUpdate(BaseModel):
     personality: Optional[str] = None
     custom_instructions: Optional[str] = None
     preferred_language: Optional[str] = None
+    language: Optional[str] = None
+    welcome_message: Optional[str] = None
+    auto_order: Optional[bool] = None
     handoff_keywords: Optional[List[str]] = None
     delivery_terms: Optional[str] = None
     payment_terms: Optional[str] = None
@@ -280,6 +283,9 @@ class AISettingsResponse(BaseModel):
     personality: str
     custom_instructions: Optional[str] = None
     preferred_language: str
+    language: Optional[str] = None
+    welcome_message: Optional[str] = None
+    auto_order: Optional[bool] = False
     handoff_keywords: List[str]
     delivery_terms: str
     payment_terms: str

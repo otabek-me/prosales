@@ -14,7 +14,8 @@ export default function NotificationsPage() {
     try {
       const res = await apiGet('/meta/notifications');
       const items = res?.data?.items || res?.data || [];
-      setNotifications(Array.isArray(items) ? items : []);
+      const list = Array.isArray(items) ? items.map((n: any) => ({ ...n, unread: isNotificationUnread(n) })) : [];
+      setNotifications(list);
     } catch {
       setNotifications([]);
     } finally {
@@ -29,6 +30,7 @@ export default function NotificationsPage() {
   }, []);
 
   const markAllRead = () => {
+    markAllNotificationsRead();
     setNotifications((prev) => prev.map((n: any) => ({ ...n, unread: false })));
   };
 

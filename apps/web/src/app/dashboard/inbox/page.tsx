@@ -1,10 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { MessageSquare, Send, Loader2, Bot, User, Radio, MessageCircle, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { apiGet, apiPost, apiPut } from '@/lib/api';
 
 export default function InboxPage() {
+  const searchParams = useSearchParams();
+  const customerIdParam = searchParams.get('customer_id');
+
   const [conversations, setConversations] = useState<any[]>([]);
   const [selectedConv, setSelectedConv] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -42,6 +46,14 @@ export default function InboxPage() {
       const res = await apiGet('/conversations');
       const list = res.data || [];
       setConversations(list);
+
+      // Agar customer_id param bo'lsa va hali suhbat tanlanmagan bo'lsa, o'shani tanlash
+      if (customerIdParam && !selectedConvRef.current && list.length > 0) {
+        const found = list.find((c: any) => c.customer_id === customerIdParam || c.customer?.id === customerIdParam);
+        if (found) {
+          selectConversation(found);
+        }
+      }
     } catch (err) {
       console.error('Suhbatlarni yuklashda xatolik:', err);
     } finally {

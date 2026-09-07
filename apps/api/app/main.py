@@ -24,10 +24,10 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS Middleware
+# CORS Middleware — Vercel, localhost dev, va boshqa frontendlar uchun
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"(https?://localhost(:\d+)?|https://.*\.vercel\.app|https://.*\.netlify\.app)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -150,6 +150,17 @@ async def on_startup():
         await conn.run_sync(Base.metadata.create_all)
         await _run_lightweight_migrations(conn)
     logger.info("Database tables initialized.")
+
+    # Avtomatik tariflar (.env dagi limit va narxlar) ni bazaga sinxronlash
+    try:
+        from app.database import AsyncSessionLocal
+        from app.routers.subscriptions import _ensure_seed_plans
+        async with AsyncSessionLocal() as session:
+            await _ensure_seed_plans(session)
+            await session.commit()
+        logger.info("Subscription plans synchronized from .env.")
+    except Exception as e:
+        logger.warning(f"Error seeding plans on startup: {e}")
 
     # Avtomatik Webhook Sinxronizatsiyasi (.env dagi TELEGRAM_WEBHOOK_DOMAIN bo'yicha)
     wh_domain = (settings.TELEGRAM_WEBHOOK_DOMAIN or "").strip().rstrip("/")

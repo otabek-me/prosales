@@ -131,15 +131,12 @@ export default function Navbar() {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(async () => {
       try {
-        const [pRes, oRes, cRes] = await Promise.allSettled([
-          apiGet('/products?search=' + encodeURIComponent(q) + '&limit=5'),
-          apiGet('/orders?search=' + encodeURIComponent(q) + '&limit=5'),
-          apiGet('/customers?search=' + encodeURIComponent(q) + '&limit=5'),
-        ]);
+        const res = await apiGet('/meta/search?q=' + encodeURIComponent(q) + '&limit=5');
+        const data = res?.data || { products: [], orders: [], customers: [] };
         setSearchResults({
-          products: pRes.status === 'fulfilled' ? (pRes.value?.data?.items || pRes.value?.data || []) : [],
-          orders: oRes.status === 'fulfilled' ? (oRes.value?.data?.items || oRes.value?.data || []) : [],
-          customers: cRes.status === 'fulfilled' ? (cRes.value?.data?.items || cRes.value?.data || []) : [],
+          products: data.products || [],
+          orders: data.orders || [],
+          customers: data.customers || [],
         });
       } catch {}
       setSearching(false);
@@ -201,17 +198,17 @@ export default function Navbar() {
                   <>
                     {searchResults.products.length > 0 && (
                       <SearchGroup icon={<ShoppingBag className="w-4 h-4" />} label="Mahsulotlar">
-                        {searchResults.products.map((p: any) => (<SearchItem key={p.id} title={p.name} sub={p.sku + ' · ' + (p.price || 0) + ' UZS'} onClick={() => { setSearchOpen(false); router.push('/dashboard/products/' + p.id); }} />))}
+                        {searchResults.products.map((p: any) => (<SearchItem key={p.id} title={p.name} sub={p.sku + ' · ' + (p.price || 0) + ' UZS'} onClick={() => { setSearchOpen(false); router.push('/dashboard/products?search=' + encodeURIComponent(p.name)); }} />))}
                       </SearchGroup>
                     )}
                     {searchResults.orders.length > 0 && (
                       <SearchGroup icon={<ShoppingCart className="w-4 h-4" />} label="Buyurtmalar">
-                        {searchResults.orders.map((o: any) => (<SearchItem key={o.id} title={o.id} sub={(o.customer_name || o.customer || '—') + ' · ' + (o.total || 0) + ' UZS'} onClick={() => { setSearchOpen(false); router.push('/dashboard/orders/' + o.id); }} />))}
+                        {searchResults.orders.map((o: any) => (<SearchItem key={o.id} title={o.order_number || o.id} sub={(o.customer_name || '—') + ' · ' + (o.total_amount || 0) + ' UZS'} onClick={() => { setSearchOpen(false); router.push('/dashboard/orders?search=' + encodeURIComponent(o.order_number || o.id)); }} />))}
                       </SearchGroup>
                     )}
                     {searchResults.customers.length > 0 && (
                       <SearchGroup icon={<User className="w-4 h-4" />} label="Mijdorlar">
-                        {searchResults.customers.map((c: any) => (<SearchItem key={c.id} title={c.full_name || c.name || '—'} sub={c.phone || ''} onClick={() => { setSearchOpen(false); router.push('/dashboard/customers/' + c.id); }} />))}
+                        {searchResults.customers.map((c: any) => (<SearchItem key={c.id} title={c.first_name ? (c.first_name + ' ' + (c.last_name || '')) : (c.username || '—')} sub={c.phone || c.telegram_id || ''} onClick={() => { setSearchOpen(false); router.push('/dashboard/customers?search=' + encodeURIComponent(c.first_name || c.username || '')); }} />))}
                       </SearchGroup>
                     )}
                   </>

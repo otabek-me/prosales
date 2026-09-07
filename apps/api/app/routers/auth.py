@@ -78,8 +78,12 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
     db.add(ai_set)
 
     # Attach Free Trial Plan
-    plan_res = await db.execute(select(Plan).where(Plan.slug == "starter"))
+    plan_res = await db.execute(select(Plan).where(Plan.slug == "free-trial"))
     plan = plan_res.scalars().first()
+    if not plan:
+        # Fallback: try any plan
+        plan_res = await db.execute(select(Plan).limit(1))
+        plan = plan_res.scalars().first()
     if plan:
         sub = Subscription(
             organization_id=new_org.id,

@@ -28,7 +28,7 @@ class AISalesEngine:
                 api_key=settings.GROQ_API_KEY,
                 base_url="https://api.groq.com/openai/v1"
             )
-            self.model = settings.DEFAULT_AI_MODEL if settings.DEFAULT_AI_MODEL and settings.DEFAULT_AI_MODEL != "llama-3.3-70b-versatile" else "openai/gpt-oss-120b"
+            self.model = settings.DEFAULT_AI_MODEL or "llama-3.3-70b-versatile"
         # 2. If Gemini selected or Gemini API key available
         elif provider == "gemini" and settings.GEMINI_API_KEY and not settings.GEMINI_API_KEY.startswith("your_"):
             self.client = AsyncOpenAI(

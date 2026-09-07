@@ -25,7 +25,12 @@ async def get_current_user(
     if user_id is None or payload.get("type") != "access":
         raise credentials_exception
     
-    result = await db.execute(select(User).where(User.id == UUID(user_id)))
+    try:
+        user_uuid = UUID(str(user_id))
+    except (ValueError, TypeError):
+        raise credentials_exception
+    
+    result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalars().first()
     if user is None or not user.is_active:
         raise credentials_exception
@@ -37,8 +42,11 @@ async def get_current_organization_id(
     db: AsyncSession = Depends(get_db)
 ) -> UUID:
     # If user provided X-Organization-Id header, verify user is member of it
-    if x_organization_id:
-        org_uuid = UUID(x_organization_id)
+    if x_organization_id and x_organization_id not in ("undefined", "null", ""):
+        try:
+            org_uuid = UUID(str(x_organization_id))
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Noto'g'ri tashkilot identifikatori (X-Organization-Id)")
         result = await db.execute(
             select(Membership).where(
                 Membership.user_id == current_user.id,

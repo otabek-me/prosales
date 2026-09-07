@@ -56,7 +56,9 @@ async def get_ai_settings(
         db.add(ai_set)
         await db.commit()
 
-    return StandardResponse(success=True, data=AISettingsResponse.model_validate(ai_set))
+    resp_data = AISettingsResponse.model_validate(ai_set)
+    resp_data.language = ai_set.preferred_language
+    return StandardResponse(success=True, data=resp_data)
 
 @router.put("/ai-settings", response_model=StandardResponse, dependencies=[Depends(RequirePermission("settings.manage"))])
 async def update_ai_settings(
@@ -78,6 +80,8 @@ async def update_ai_settings(
         ai_set.custom_instructions = data.custom_instructions
     if data.preferred_language is not None:
         ai_set.preferred_language = data.preferred_language
+    elif data.language is not None:
+        ai_set.preferred_language = data.language
     if data.handoff_keywords is not None:
         ai_set.handoff_keywords = data.handoff_keywords
     if data.delivery_terms is not None:
@@ -86,4 +90,8 @@ async def update_ai_settings(
         ai_set.payment_terms = data.payment_terms
 
     await db.commit()
-    return StandardResponse(success=True, data=AISettingsResponse.model_validate(ai_set))
+    resp_data = AISettingsResponse.model_validate(ai_set)
+    resp_data.language = ai_set.preferred_language
+    resp_data.welcome_message = data.welcome_message or ""
+    resp_data.auto_order = data.auto_order or False
+    return StandardResponse(success=True, data=resp_data)
