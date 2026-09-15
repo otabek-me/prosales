@@ -186,7 +186,7 @@ h1, h2, h3, .font-display {
   to { background-position: 200% center; }
 }
 @keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes fade-in {
@@ -195,27 +195,39 @@ h1, h2, h3, .font-display {
 }
 @keyframes float {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+  50% { transform: translateY(-6px); }
 }
 @keyframes breathe {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.92); }
 }
 @keyframes glow {
-  0%, 100% { box-shadow: 0 0 18px rgba(99, 102, 241, 0.30); transform: scale(1); }
-  50% { box-shadow: 0 0 30px rgba(99, 102, 241, 0.55); transform: scale(1.03); }
+  0%, 100% { box-shadow: 0 0 16px rgba(99, 102, 241, 0.25); transform: scale(1); }
+  50% { box-shadow: 0 0 26px rgba(99, 102, 241, 0.45); transform: scale(1.02); }
+}
+@keyframes ping-soft {
+  0% { transform: scale(1); opacity: 0.85; }
+  70%, 100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.96); }
 }
 @keyframes shimmer {
   0% { background-position: -400px 0; }
   100% { background-position: 400px 0; }
 }
 
-/* ===== Animation utilities ===== */
-.animate-fade-in-up { animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* ===== Animation utilities (Sokin, silliq va ko'zga yoqimli tezlikda) ===== */
+.animate-fade-in-up { animation: fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .animate-fade-in { animation: fade-in 0.25s ease both; }
-.animate-float { animation: float 6s ease-in-out infinite; }
-.animate-glow { animation: glow 4s ease-in-out infinite; will-change: box-shadow, transform; }
-.animate-breathe { animation: breathe 4s ease-in-out infinite; }
+.animate-float { animation: float 7s ease-in-out infinite; }
+.animate-glow { animation: glow 5s ease-in-out infinite; will-change: box-shadow, transform; }
+.animate-breathe { animation: breathe 3.5s ease-in-out infinite; }
+
+/* Tailwind standart tezkor miltillashlarini sokinlashtirish */
+.animate-ping { animation: ping-soft 2.8s cubic-bezier(0.16, 1, 0.3, 1) infinite !important; }
+.animate-pulse { animation: pulse-soft 3.2s ease-in-out infinite !important; }
 .stagger > * { animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .stagger > *:nth-child(1) { animation-delay: 0.03s; }
 .stagger > *:nth-child(2) { animation-delay: 0.07s; }

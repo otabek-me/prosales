@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus, Search, ShoppingBag, Trash2, Edit3, CheckCircle2, AlertCircle,
   Loader2, PackageOpen, RefreshCw, Eye, X, Tag, Upload, Film, Image as ImageIcon,
@@ -9,6 +10,7 @@ import {
 import { apiGet, apiPost, apiPut, apiDelete, uploadFileWithProgress, getFileUrl } from '@/lib/api';
 
 export default function ProductsCatalog() {
+  const [mounted, setMounted] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [subInfo, setSubInfo] = useState<any>(null);
@@ -25,6 +27,21 @@ export default function ProductsCatalog() {
 
   // View / Preview Modal State
   const [viewingProduct, setViewingProduct] = useState<any | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (showModal || viewingProduct) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showModal, viewingProduct]);
 
   // Form State
   const [formData, setFormData] = useState<{
@@ -521,8 +538,8 @@ export default function ProductsCatalog() {
       )}
 
       {/* Add / Edit Product Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-fade-in">
+      {showModal && mounted && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-fade-in">
           <div className="relative w-full max-w-2xl bg-[#0b0f19] border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 flex flex-col max-h-[92vh] overflow-hidden">
             {/* Modal Header (Fixed) */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#0f1422] shrink-0">
@@ -797,12 +814,13 @@ export default function ProductsCatalog() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Product Details & Video Player Modal */}
-      {viewingProduct && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-fade-in">
+      {viewingProduct && mounted && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-fade-in">
           <div className="relative w-full max-w-2xl bg-[#0b0f19] border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/80 flex flex-col max-h-[92vh] overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#0f1422] shrink-0">
@@ -934,7 +952,8 @@ export default function ProductsCatalog() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
