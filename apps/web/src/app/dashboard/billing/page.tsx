@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Loader2, CheckCircle2, Zap, Star, Building2, Copy, Check, AlertCircle, Clock, ShieldCheck, ArrowRight, Package, MessageSquare } from 'lucide-react';
+import { CreditCard, Loader2, CheckCircle2, Zap, Star, Building2, Copy, Check, AlertCircle, Clock, ShieldCheck, ArrowRight, Package, MessageSquare, RefreshCw } from 'lucide-react';
 import { apiGet, apiPost } from '@/lib/api';
 
 export default function BillingPage() {
