@@ -6,7 +6,11 @@ from typing import Optional
 from datetime import datetime, timedelta
 
 from app.database import get_db
-from app.models import Organization, User, Order, TelegramBot, OrderStatusEnum, Membership, RoleEnum, AISettings, Plan, Subscription, SubscriptionStatusEnum
+from app.models import (
+    Organization, User, Order, TelegramBot, OrderStatusEnum, Membership, RoleEnum,
+    AISettings, Plan, Subscription, SubscriptionStatusEnum, Product, Customer,
+    Conversation, Message, OrderItem, PaymentRequest, PaymentRequestStatusEnum
+)
 from app.schemas import StandardResponse
 from app.dependencies import get_current_user
 from app.config import settings
@@ -210,10 +214,27 @@ async def list_all_businesses(db: AsyncSession = Depends(get_db)):
             select(func.count(Product.id)).where(Product.organization_id == o.id)
         )).scalar() or 0
 
-        # Buyurtmalar soni
-        order_count = (await db.execute(
-            select(func.count(Order.id)).where(Order.organization_id == o.id)
-        )).scalar() or 0
+        # Buyurtmalar soni va jami daromad
+        orders_res = await db.execute(
+            select(Order).where(Order.organization_id == o.id, Order.status != OrderStatusEnum.CANCELLED)
+        )
+        orders = orders_res.scalars().all()
+        order_count = len(orders)
+        total_revenue = sum(float(ord_item.total_amount or 0) for ord_item in orders)
+
+        # Biznes egasi (Owner) ma'lumotlari
+        owner_res = await db.execute(
+            select(User)
+            .join(Membership, Membership.user_id == User.id)
+            .where(Membership.organization_id == o.id, Membership.role == RoleEnum.OWNER)
+        )
+        owner = owner_res.scalars().first()
+
+        # Bot ma'lumotlari
+        bot_res = await db.execute(
+            select(TelegramBot).where(TelegramBot.organization_id == o.id)
+        )
+        tg_bot = bot_res.scalars().first()
 
         data.append({
             "id": str(o.id),
@@ -223,6 +244,16 @@ async def list_all_businesses(db: AsyncSession = Depends(get_db)):
             "category": o.category,
             "is_active": o.is_active,
             "created_at": o.created_at.isoformat(),
+            "owner": {
+                "id": str(owner.id) if owner else None,
+                "full_name": owner.full_name if owner else "Noma'lum",
+                "email": owner.email if owner else "-",
+                "phone": owner.phone if owner else "-"
+            } if owner else None,
+            "bot": {
+                "username": tg_bot.bot_username if tg_bot else None,
+                "status": tg_bot.status if tg_bot else "DISCONNECTED"
+            } if tg_bot else None,
             "subscription": {
                 "plan_name": plan_name,
                 "plan_id": plan_id_str,
@@ -232,7 +263,8 @@ async def list_all_businesses(db: AsyncSession = Depends(get_db)):
             },
             "stats": {
                 "products_count": prod_count,
-                "orders_count": order_count
+                "orders_count": order_count,
+                "total_revenue": total_revenue
             }
         })
 
@@ -556,5 +588,332 @@ async def toggle_business_status(
         success=True,
         data={"message": f"'{org.name}' biznesi muvaffaqiyatli {status_str}.", "is_active": org.is_active}
     )
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str
+
+
+class UpdateBusinessInfoRequest(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    category: Optional[str] = None
+
+
+@router.get("/businesses/{org_id}/details", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def get_business_details(org_id: str, db: AsyncSession = Depends(get_db)):
+    """Biznes haqida to'liq va batafsil barcha ma'lumotlarni olish."""
+    from uuid import UUID
+    try:
+        org_uuid = UUID(org_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Noto'g'ri tashkilot ID si")
+
+    org_res = await db.execute(select(Organization).where(Organization.id == org_uuid))
+    org = org_res.scalars().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Tashkilot topilmadi")
+
+    # Egasi (Owner)
+    owner_res = await db.execute(
+        select(User)
+        .join(Membership, Membership.user_id == User.id)
+        .where(Membership.organization_id == org_uuid, Membership.role == RoleEnum.OWNER)
+    )
+    owner = owner_res.scalars().first()
+
+    # Bot
+    bot_res = await db.execute(select(TelegramBot).where(TelegramBot.organization_id == org_uuid))
+    tg_bot = bot_res.scalars().first()
+
+    # Obuna
+    sub_res = await db.execute(select(Subscription).where(Subscription.organization_id == org_uuid))
+    sub = sub_res.scalars().first()
+    plan = None
+    if sub:
+        plan_res = await db.execute(select(Plan).where(Plan.id == sub.plan_id))
+        plan = plan_res.scalars().first()
+
+    # AI Sozlamalari
+    ai_res = await db.execute(select(AISettings).where(AISettings.organization_id == org_uuid))
+    ai_settings = ai_res.scalars().first()
+
+    # Mahsulotlar (oxirgi 10 ta)
+    prods_res = await db.execute(
+        select(Product).where(Product.organization_id == org_uuid).order_by(Product.created_at.desc()).limit(10)
+    )
+    prods = prods_res.scalars().all()
+    total_prods_count = (await db.execute(
+        select(func.count(Product.id)).where(Product.organization_id == org_uuid)
+    )).scalar() or 0
+
+    # Buyurtmalar (oxirgi 10 ta)
+    orders_res = await db.execute(
+        select(Order).where(Order.organization_id == org_uuid).order_by(Order.created_at.desc()).limit(10)
+    )
+    recent_orders = orders_res.scalars().all()
+    all_orders = (await db.execute(select(Order).where(Order.organization_id == org_uuid))).scalars().all()
+    total_revenue = sum(float(o.total_amount or 0) for o in all_orders if o.status != OrderStatusEnum.CANCELLED)
+
+    # Mijozlar soni
+    total_customers_count = (await db.execute(
+        select(func.count(Customer.id)).where(Customer.organization_id == org_uuid)
+    )).scalar() or 0
+
+    # To'lovlar tarixi
+    payments_res = await db.execute(
+        select(PaymentRequest).where(PaymentRequest.organization_id == org_uuid).order_by(PaymentRequest.created_at.desc()).limit(10)
+    )
+    payments = payments_res.scalars().all()
+
+    now = datetime.utcnow()
+    days_left = 0
+    if sub and sub.current_period_end:
+        days_left = max(0, (sub.current_period_end - now).days)
+
+    return StandardResponse(
+        success=True,
+        data={
+            "business": {
+                "id": str(org.id),
+                "name": org.name,
+                "slug": org.slug,
+                "phone": org.phone,
+                "category": org.category,
+                "is_active": org.is_active,
+                "created_at": org.created_at.strftime("%Y-%m-%d %H:%M") if org.created_at else "-"
+            },
+            "owner": {
+                "id": str(owner.id) if owner else None,
+                "full_name": owner.full_name if owner else "Noma'lum",
+                "email": owner.email if owner else "-",
+                "phone": owner.phone if owner else "-",
+                "is_superadmin": owner.is_superadmin if owner else False
+            } if owner else None,
+            "bot": {
+                "id": str(tg_bot.id) if tg_bot else None,
+                "bot_username": tg_bot.bot_username if tg_bot else None,
+                "bot_name": tg_bot.bot_name if tg_bot else None,
+                "status": tg_bot.status if tg_bot else "DISCONNECTED",
+                "webhook_url": tg_bot.webhook_url if tg_bot else None,
+                "connected_at": tg_bot.created_at.strftime("%Y-%m-%d %H:%M") if tg_bot and tg_bot.created_at else None
+            } if tg_bot else None,
+            "subscription": {
+                "id": str(sub.id) if sub else None,
+                "plan_name": plan.name if plan else "Obunasiz",
+                "plan_slug": plan.slug if plan else None,
+                "price_monthly": float(plan.price_monthly) if plan else 0,
+                "status": "EXPIRED" if sub and sub.current_period_end and sub.current_period_end < now else (sub.status.value if sub else "NO_SUB"),
+                "days_left": days_left,
+                "period_start": sub.current_period_start.strftime("%Y-%m-%d %H:%M") if sub and sub.current_period_start else None,
+                "period_end": sub.current_period_end.strftime("%Y-%m-%d %H:%M") if sub and sub.current_period_end else None
+            },
+            "ai_settings": {
+                "bot_name": ai_settings.bot_name if ai_settings else "AI Sotuvchi",
+                "personality": ai_settings.personality if ai_settings else "-",
+                "system_instructions": ai_settings.system_instructions if ai_settings else None,
+                "model": getattr(ai_settings, "model", None) or "llama-3.3-70b-versatile"
+            } if ai_settings else None,
+            "stats": {
+                "total_products": total_prods_count,
+                "total_customers": total_customers_count,
+                "total_orders": len(all_orders),
+                "total_revenue": total_revenue
+            },
+            "recent_products": [
+                {
+                    "id": str(p.id),
+                    "name": p.name,
+                    "price": float(p.price or 0),
+                    "stock": p.stock,
+                    "is_active": p.is_active
+                }
+                for p in prods
+            ],
+            "recent_orders": [
+                {
+                    "id": str(o.id),
+                    "order_number": o.order_number,
+                    "customer_name": o.customer_name or "Mijoz",
+                    "total_amount": float(o.total_amount or 0),
+                    "status": o.status.value,
+                    "created_at": o.created_at.strftime("%Y-%m-%d %H:%M") if o.created_at else "-"
+                }
+                for o in recent_orders
+            ],
+            "payments_history": [
+                {
+                    "id": str(pay.id),
+                    "amount": float(pay.amount or 0),
+                    "status": pay.status.value,
+                    "sender_name": pay.sender_name,
+                    "created_at": pay.created_at.strftime("%Y-%m-%d %H:%M") if pay.created_at else "-"
+                }
+                for pay in payments
+            ]
+        }
+    )
+
+
+@router.post("/businesses/{org_id}/reset-password", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def reset_business_owner_password(
+    org_id: str,
+    data: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Biznes egasining parolini yangilash (Admin tomonidan tiklash)."""
+    from uuid import UUID
+    try:
+        org_uuid = UUID(org_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Noto'g'ri tashkilot ID si")
+
+    # Egasi (Owner) ni topish
+    owner_res = await db.execute(
+        select(User)
+        .join(Membership, Membership.user_id == User.id)
+        .where(Membership.organization_id == org_uuid, Membership.role == RoleEnum.OWNER)
+    )
+    owner = owner_res.scalars().first()
+    if not owner:
+        raise HTTPException(status_code=404, detail="Biznes egasi (Owner) topilmadi.")
+
+    if len(data.new_password.strip()) < 6:
+        raise HTTPException(status_code=400, detail="Yangi parol kamida 6 ta belgidan iborat bo'lishi kerak.")
+
+    owner.password_hash = get_password_hash(data.new_password.strip())
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data={
+            "message": f"✅ '{owner.full_name}' ({owner.email}) paroli muvaffaqiyatli yangilandi!",
+            "owner_email": owner.email,
+            "owner_name": owner.full_name
+        }
+    )
+
+
+@router.post("/businesses/{org_id}/cancel-subscription", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def cancel_business_subscription(
+    org_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Biznes obunasini bekor qilish (status = CANCELLED)."""
+    from uuid import UUID
+    try:
+        org_uuid = UUID(org_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Noto'g'ri tashkilot ID si")
+
+    sub_res = await db.execute(select(Subscription).where(Subscription.organization_id == org_uuid))
+    sub = sub_res.scalars().first()
+    if not sub:
+        raise HTTPException(status_code=404, detail="Biznesda faol obuna topilmadi.")
+
+    sub.status = SubscriptionStatusEnum.CANCELLED
+    sub.current_period_end = datetime.utcnow()
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data={"message": "Biznes obunasi muvaffaqiyatli bekor qilindi (xizmatlar to'xtatildi)."}
+    )
+
+
+@router.put("/businesses/{org_id}", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def update_business_info(
+    org_id: str,
+    data: UpdateBusinessInfoRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Biznes ma'lumotlarini (nom, telefon, kategoriya) yangilash."""
+    from uuid import UUID
+    try:
+        org_uuid = UUID(org_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Noto'g'ri tashkilot ID si")
+
+    org_res = await db.execute(select(Organization).where(Organization.id == org_uuid))
+    org = org_res.scalars().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Tashkilot topilmadi")
+
+    if data.name is not None and data.name.strip():
+        org.name = data.name.strip()
+    if data.phone is not None:
+        org.phone = data.phone.strip() or None
+    if data.category is not None:
+        org.category = data.category.strip() or None
+
+    await db.commit()
+    return StandardResponse(
+        success=True,
+        data={"message": f"'{org.name}' ma'lumotlari muvaffaqiyatli yangilandi!"}
+    )
+
+
+@router.delete("/businesses/{org_id}", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def delete_business(
+    org_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Biznesni barcha ma'lumotlari bilan to'liq va xavfsiz o'chirib yuborish."""
+    from uuid import UUID
+    try:
+        org_uuid = UUID(org_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Noto'g'ri tashkilot ID si")
+
+    org_res = await db.execute(select(Organization).where(Organization.id == org_uuid))
+    org = org_res.scalars().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Tashkilot topilmadi")
+
+    org_name = org.name
+
+    # Bog'langan barcha jadvallardan xavfsiz tozalash
+    # 1. OrderItems & Orders
+    orders_res = await db.execute(select(Order).where(Order.organization_id == org_uuid))
+    orders = orders_res.scalars().all()
+    for o in orders:
+        await db.execute(OrderItem.__table__.delete().where(OrderItem.order_id == o.id))
+        await db.delete(o)
+
+    # 2. Messages & Conversations
+    convs_res = await db.execute(select(Conversation).where(Conversation.organization_id == org_uuid))
+    convs = convs_res.scalars().all()
+    for c in convs:
+        await db.execute(Message.__table__.delete().where(Message.conversation_id == c.id))
+        await db.delete(c)
+
+    # 3. Customers
+    await db.execute(Customer.__table__.delete().where(Customer.organization_id == org_uuid))
+
+    # 4. Products
+    await db.execute(Product.__table__.delete().where(Product.organization_id == org_uuid))
+
+    # 5. TelegramBot
+    await db.execute(TelegramBot.__table__.delete().where(TelegramBot.organization_id == org_uuid))
+
+    # 6. AISettings
+    await db.execute(AISettings.__table__.delete().where(AISettings.organization_id == org_uuid))
+
+    # 7. Subscriptions & Payments
+    await db.execute(PaymentRequest.__table__.delete().where(PaymentRequest.organization_id == org_uuid))
+    await db.execute(Subscription.__table__.delete().where(Subscription.organization_id == org_uuid))
+
+    # 8. Memberships
+    await db.execute(Membership.__table__.delete().where(Membership.organization_id == org_uuid))
+
+    # 9. Organization o'zi
+    await db.delete(org)
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data={"message": f"'{org_name}' biznesi va unga tegishli barcha ma'lumotlar butunlay o'chirildi."}
+    )
+
 
 

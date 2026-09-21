@@ -100,6 +100,8 @@ export default function BillingPage() {
     pro: 'from-amber-500 to-orange-500',
   };
 
+  const isExpired = Boolean(currentSub && (currentSub.status === 'EXPIRED' || currentSub.days_left <= 0 || currentSub.is_active === false));
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -134,32 +136,56 @@ export default function BillingPage() {
 
       {/* Current Subscription Card & Limits Usage */}
       {currentSub && (
-        <div className="glass-panel p-6 rounded-2xl border border-indigo-500/30 shadow-xl bg-gradient-to-r from-indigo-950/40 via-slate-900 to-slate-900">
+        <div className={`glass-panel p-6 rounded-2xl border shadow-xl bg-gradient-to-r transition-all ${
+          isExpired
+            ? 'border-red-500/50 from-red-950/40 via-slate-900 to-slate-900 shadow-red-950/20'
+            : 'border-indigo-500/30 from-indigo-950/40 via-slate-900 to-slate-900'
+        }`}>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-5">
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Joriy tarifingiz</span>
-              <div className="flex items-center gap-3 mt-1">
+              <div className="flex items-center gap-3 mt-1 flex-wrap">
                 <h3 className="text-2xl font-bold text-white">{currentSub.plan?.name || 'Starter'}</h3>
                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                  currentSub.status === 'TRIAL'
+                  isExpired
+                    ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                    : currentSub.status === 'TRIAL'
                     ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                    : currentSub.status === 'ACTIVE'
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                 }`}>
-                  {currentSub.status === 'TRIAL' ? '🎁 Sinov davri (Free Trial)' : currentSub.status === 'ACTIVE' ? '✅ Faol obuna' : 'Muddati tugagan'}
+                  {isExpired ? '⚠️ Muddati tugagan' : currentSub.status === 'TRIAL' ? '🎁 Sinov davri (Free Trial)' : '✅ Faol obuna'}
                 </span>
               </div>
             </div>
 
-            <div className="text-left md:text-right">
-              <span className="text-xs text-slate-400">Amal qilish muddati</span>
-              <p className="text-sm font-semibold text-slate-200 mt-0.5">
-                {currentSub.current_period_end ? new Date(currentSub.current_period_end).toLocaleDateString('uz', { dateStyle: 'long' }) : '-'}
-              </p>
-              <span className="text-xs font-semibold text-indigo-400">
-                {currentSub.days_left > 0 ? `${currentSub.days_left} kun qoldi` : "Muddat tugadi"}
-              </span>
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="text-left md:text-right">
+                <span className="text-xs text-slate-400">Amal qilish muddati</span>
+                <p className="text-sm font-semibold text-slate-200 mt-0.5">
+                  {currentSub.current_period_end ? new Date(currentSub.current_period_end).toLocaleDateString('uz', { dateStyle: 'long' }) : '-'}
+                </p>
+                <span className={`text-xs font-semibold ${isExpired ? 'text-red-400' : 'text-indigo-400'}`}>
+                  {isExpired ? "Muddat tugadi" : `${currentSub.days_left} kun qoldi`}
+                </span>
+              </div>
+
+              {/* To'lov qilib davom etish tugmasi */}
+              {currentSub.plan && (
+                <button
+                  onClick={() => {
+                    const matched = plans.find(p => p.id === currentSub.plan.id || p.slug === currentSub.plan.slug) || currentSub.plan;
+                    setSelectedPlan(matched);
+                  }}
+                  className={`px-5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg flex items-center gap-2 shrink-0 ${
+                    isExpired
+                      ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
+                      : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
+                  }`}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>{isExpired ? "To'lov qilib davom etish" : "Tarifni uzaytirish"}</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -260,8 +286,33 @@ export default function BillingPage() {
 
                 <div className="mt-6 pt-4 border-t border-slate-800">
                   {isCurrent ? (
-                    <div className="w-full py-2.5 rounded-xl bg-indigo-500/20 text-indigo-300 text-xs font-bold text-center border border-indigo-500/30">
-                      ✓ Joriy faol tarif
+                    <div className="space-y-2">
+                      <div className={`w-full py-1.5 rounded-xl text-[11px] font-bold text-center border ${
+                        currentSub?.status === 'EXPIRED' || currentSub?.days_left <= 0 || currentSub?.is_active === false
+                          ? 'bg-red-500/15 text-red-300 border-red-500/30'
+                          : 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                      }`}>
+                        {currentSub?.status === 'EXPIRED' || currentSub?.days_left <= 0 || currentSub?.is_active === false
+                          ? '⚠️ Muddati tugagan'
+                          : '✓ Joriy faol tarif'}
+                      </div>
+                      {price > 0 && (
+                        <button
+                          onClick={() => setSelectedPlan(plan)}
+                          className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 ${
+                            currentSub?.status === 'EXPIRED' || currentSub?.days_left <= 0 || currentSub?.is_active === false
+                              ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30'
+                              : 'bg-indigo-600/80 hover:bg-indigo-600 text-white shadow-indigo-600/20'
+                          }`}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>
+                            {currentSub?.status === 'EXPIRED' || currentSub?.days_left <= 0 || currentSub?.is_active === false
+                              ? "To'lov qilib davom etish"
+                              : "Muddatni uzaytirish"}
+                          </span>
+                        </button>
+                      )}
                     </div>
                   ) : price === 0 ? (
                     <div className="w-full py-2.5 rounded-xl bg-slate-800/40 text-slate-400 text-xs font-medium text-center border border-slate-800">
@@ -334,7 +385,11 @@ export default function BillingPage() {
           <div className="w-full max-w-lg glass-panel rounded-2xl p-6 border border-indigo-500/40 shadow-2xl space-y-5">
             <div className="flex justify-between items-start border-b border-slate-800 pb-3">
               <div>
-                <h3 className="text-lg font-bold text-white">To&apos;lov va Obunani Faollashtirish</h3>
+                <h3 className="text-lg font-bold text-white">
+                  {currentSub?.plan?.id === selectedPlan.id || currentSub?.plan?.slug === selectedPlan.slug
+                    ? "Tarifni Uzaytirish / To'lov Qilish"
+                    : "To'lov va Obunani Faollashtirish"}
+                </h3>
                 <p className="text-xs text-indigo-400 font-semibold mt-0.5">
                   Tarif: {selectedPlan.name} ({Number(selectedPlan.price_monthly || 0).toLocaleString()} UZS / oy)
                 </p>
