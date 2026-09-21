@@ -184,21 +184,59 @@ async def get_system_metrics(db: AsyncSession = Depends(get_db)):
 async def list_all_businesses(db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(Organization).order_by(Organization.created_at.desc()))
     orgs = res.scalars().all()
-    return StandardResponse(
-        success=True,
-        data=[
-            {
-                "id": str(o.id),
-                "name": o.name,
-                "slug": o.slug,
-                "phone": o.phone,
-                "category": o.category,
-                "is_active": o.is_active,
-                "created_at": o.created_at.isoformat()
+    
+    data = []
+    now = datetime.utcnow()
+    for o in orgs:
+        # Obuna ma'lumotlari
+        sub_res = await db.execute(select(Subscription).where(Subscription.organization_id == o.id))
+        sub = sub_res.scalars().first()
+        plan_name = "Obunasiz"
+        sub_status = "NO_SUB"
+        days_left = 0
+        plan_id_str = None
+        if sub:
+            plan_res = await db.execute(select(Plan).where(Plan.id == sub.plan_id))
+            plan = plan_res.scalars().first()
+            plan_name = plan.name if plan else "Noma'lum"
+            plan_id_str = str(sub.plan_id)
+            is_expired = sub.current_period_end and sub.current_period_end < now
+            sub_status = "EXPIRED" if is_expired else sub.status.value
+            if sub.current_period_end:
+                days_left = max(0, (sub.current_period_end - now).days)
+
+        # Mahsulotlar soni
+        prod_count = (await db.execute(
+            select(func.count(Product.id)).where(Product.organization_id == o.id)
+        )).scalar() or 0
+
+        # Buyurtmalar soni
+        order_count = (await db.execute(
+            select(func.count(Order.id)).where(Order.organization_id == o.id)
+        )).scalar() or 0
+
+        data.append({
+            "id": str(o.id),
+            "name": o.name,
+            "slug": o.slug,
+            "phone": o.phone,
+            "category": o.category,
+            "is_active": o.is_active,
+            "created_at": o.created_at.isoformat(),
+            "subscription": {
+                "plan_name": plan_name,
+                "plan_id": plan_id_str,
+                "status": sub_status,
+                "days_left": days_left,
+                "period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None
+            },
+            "stats": {
+                "products_count": prod_count,
+                "orders_count": order_count
             }
-            for o in orgs
-        ]
-    )
+        })
+
+    return StandardResponse(success=True, data=data)
 
 
 @router.get("/payments", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
@@ -302,4 +340,221 @@ async def reject_payment(payment_id: str, db: AsyncSession = Depends(get_db)):
     payment.updated_at = datetime.utcnow()
     await db.commit()
     return StandardResponse(success=True, data={"message": "To'lov so'rovi rad etildi."})
+
+
+# =========================================================================
+# SUPERADMINLARNI BOSHQARISH VA YANGI SUPERADMIN QO'SHISH (Boshqa adminlar uchun)
+# =========================================================================
+
+class NewAdminCreate(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    phone: Optional[str] = None
+
+
+class GrantAdminRequest(BaseModel):
+    email: str
+
+
+class UpdateBusinessSubscriptionRequest(BaseModel):
+    plan_slug: str
+    extend_days: int = 30
+    status: Optional[str] = "ACTIVE"
+
+
+@router.get("/admins", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def list_superadmins(db: AsyncSession = Depends(get_db)):
+    """Barcha SuperAdminlarni ko'rish."""
+    res = await db.execute(select(User).where(User.is_superadmin == True).order_by(User.created_at.asc()))
+    admins = res.scalars().all()
+    return StandardResponse(
+        success=True,
+        data=[
+            {
+                "id": str(a.id),
+                "email": a.email,
+                "full_name": a.full_name,
+                "phone": a.phone,
+                "created_at": a.created_at.strftime("%Y-%m-%d %H:%M") if a.created_at else "-"
+            }
+            for a in admins
+        ]
+    )
+
+
+@router.post("/admins", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def create_new_superadmin(
+    data: NewAdminCreate,
+    current_admin: User = Depends(verify_superadmin),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Tizimga kirgan SuperAdmin tomonidan yangi SuperAdmin yaratish.
+    Maxfiy kalit talab etilmaydi (chunki hozirgi user allaqachon superadmin).
+    """
+    res = await db.execute(select(User).where(User.email == data.email.strip().lower()))
+    if res.scalars().first():
+        raise HTTPException(status_code=400, detail=f"'{data.email}' emaili bilan foydalanuvchi allaqachon mavjud.")
+
+    new_user = User(
+        email=data.email.strip().lower(),
+        password_hash=get_password_hash(data.password),
+        full_name=data.full_name.strip(),
+        phone=data.phone.strip() if data.phone else None,
+        is_superadmin=True
+    )
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
+    return StandardResponse(
+        success=True,
+        data={
+            "message": f"✅ Yangi SuperAdmin '{new_user.full_name}' ({new_user.email}) muvaffaqiyatli yaratildi!",
+            "admin": {
+                "id": str(new_user.id),
+                "email": new_user.email,
+                "full_name": new_user.full_name,
+                "phone": new_user.phone
+            }
+        }
+    )
+
+
+@router.post("/admins/grant", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def grant_superadmin_role(
+    data: GrantAdminRequest,
+    current_admin: User = Depends(verify_superadmin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Mavjud ro'yxatdan o'tgan foydalanuvchiga SuperAdmin vakolatini berish."""
+    res = await db.execute(select(User).where(User.email == data.email.strip().lower()))
+    user = res.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"'{data.email}' emailli foydalanuvchi topilmadi.")
+
+    if user.is_superadmin:
+        raise HTTPException(status_code=400, detail=f"'{user.email}' allaqachon SuperAdmin hisoblanadi.")
+
+    user.is_superadmin = True
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data={"message": f"✅ {user.full_name} ({user.email}) ga SuperAdmin vakolati berildi!"}
+    )
+
+
+@router.delete("/admins/{admin_id}", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def revoke_superadmin_role(
+    admin_id: str,
+    current_admin: User = Depends(verify_superadmin),
+    db: AsyncSession = Depends(get_db)
+):
+    """SuperAdmin vakolatini bekor qilish."""
+    from uuid import UUID
+    try:
+        target_uuid = UUID(admin_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Noto'g'ri ID")
+
+    if current_admin.id == target_uuid:
+        raise HTTPException(status_code=400, detail="O'zingizning superadmin huquqingizni bekor qila olmaysiz!")
+
+    res = await db.execute(select(User).where(User.id == target_uuid))
+    target = res.scalars().first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Foydalanuvchi topilmadi")
+
+    target.is_superadmin = False
+    await db.commit()
+
+    return StandardResponse(success=True, data={"message": f"{target.full_name} dan SuperAdmin huquqi olib tashlandi."})
+
+
+@router.post("/businesses/{org_id}/subscription", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def update_business_subscription(
+    org_id: str,
+    data: UpdateBusinessSubscriptionRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    SuperAdmin tomonidan istalgan biznesning tarifini o'zgartirish va muddatini uzaytirish.
+    """
+    from uuid import UUID
+    try:
+        org_uuid = UUID(org_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Noto'g'ri tashkilot ID si")
+
+    org_res = await db.execute(select(Organization).where(Organization.id == org_uuid))
+    org = org_res.scalars().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Tashkilot topilmadi")
+
+    plan_res = await db.execute(select(Plan).where(Plan.slug == data.plan_slug))
+    plan = plan_res.scalars().first()
+    if not plan:
+        raise HTTPException(status_code=404, detail=f"'{data.plan_slug}' tarifi topilmadi")
+
+    sub_res = await db.execute(select(Subscription).where(Subscription.organization_id == org_uuid))
+    sub = sub_res.scalars().first()
+
+    now = datetime.utcnow()
+    new_end = now + timedelta(days=data.extend_days)
+    if sub and sub.current_period_end and sub.current_period_end > now:
+        new_end = sub.current_period_end + timedelta(days=data.extend_days)
+
+    if sub:
+        sub.plan_id = plan.id
+        sub.status = SubscriptionStatusEnum.ACTIVE
+        sub.current_period_start = now
+        sub.current_period_end = new_end
+    else:
+        sub = Subscription(
+            organization_id=org_uuid,
+            plan_id=plan.id,
+            status=SubscriptionStatusEnum.ACTIVE,
+            current_period_start=now,
+            current_period_end=new_end
+        )
+        db.add(sub)
+
+    await db.commit()
+    return StandardResponse(
+        success=True,
+        data={
+            "message": f"✅ '{org.name}' biznesining obunasi '{plan.name}' tarifiga o'tkazildi va {data.extend_days} kunga uzaytirildi!",
+            "period_end": new_end.strftime("%Y-%m-%d %H:%M")
+        }
+    )
+
+
+@router.post("/businesses/{org_id}/toggle-status", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def toggle_business_status(
+    org_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Biznesni bloklash yoki faollashtirish."""
+    from uuid import UUID
+    try:
+        org_uuid = UUID(org_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Noto'g'ri tashkilot ID si")
+
+    org_res = await db.execute(select(Organization).where(Organization.id == org_uuid))
+    org = org_res.scalars().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Tashkilot topilmadi")
+
+    org.is_active = not org.is_active
+    await db.commit()
+
+    status_str = "faollashtirildi" if org.is_active else "bloklandi"
+    return StandardResponse(
+        success=True,
+        data={"message": f"'{org.name}' biznesi muvaffaqiyatli {status_str}.", "is_active": org.is_active}
+    )
+
 

@@ -120,6 +120,19 @@ export default function ProductsCatalog() {
   };
 
   const openAddModal = () => {
+    if (subInfo && (subInfo.status === 'EXPIRED' || subInfo.is_active === false)) {
+      setError("⚠️ Sizning obuna tarifingiz muddati yakunlangan. Yangi mahsulot qo'shish uchun tarifingizni yangilang!");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    const currentCount = products.filter(p => p.is_active !== false).length;
+    const limit = subInfo?.usage?.products_limit;
+    if (limit && currentCount >= limit) {
+      setError(`⚠️ Sizning tarifingizda mahsulotlar soni cheklangan (${limit} ta). Yangi mahsulot qo'shish uchun tarifingizni yangilang!`);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     setEditingProduct(null);
     setFormData({
       name: '',
@@ -139,6 +152,11 @@ export default function ProductsCatalog() {
   };
 
   const openEditModal = (p: any) => {
+    if (subInfo && (subInfo.status === 'EXPIRED' || subInfo.is_active === false)) {
+      setError("⚠️ Sizning obuna tarifingiz muddati yakunlangan. Mahsulotlarni tahrirlash uchun tarifingizni yangilang!");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     setEditingProduct(p);
     setFormData({
       name: p.name || '',

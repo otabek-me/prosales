@@ -50,17 +50,9 @@ async def upload_media_file(
             detail=f"Qo'llab-quvvatlanmaydigan fayl formati ({ext}). Faqat quyidagi formatlar ruxsat etilgan: {allowed_str}"
         )
 
-    # 2. Tashkilotning joriy tarifidagi fayl hajmi limitini olish
-    sub_res = await db.execute(select(Subscription).where(Subscription.organization_id == org_id))
-    sub = sub_res.scalars().first()
-
-    max_file_size_mb = settings.PLAN_TRIAL_MAX_FILE_SIZE_MB
-    if sub:
-        plan_res = await db.execute(select(Plan).where(Plan.id == sub.plan_id))
-        plan = plan_res.scalars().first()
-        if plan and plan.limits_json and "max_file_size_mb" in plan.limits_json:
-            max_file_size_mb = plan.limits_json["max_file_size_mb"]
-
+    # 2. Obuna faolligini tekshirish va tarif bo'yicha ruxsat etilgan fayl hajmi limitini olish
+    from app.subscription_guard import check_media_upload_allowed
+    max_file_size_mb = await check_media_upload_allowed(db, org_id)
     max_bytes = max_file_size_mb * 1024 * 1024
 
     # 3. Faylni saqlash papkasini tayyorlash

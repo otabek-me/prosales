@@ -91,6 +91,10 @@ async def connect_bot(
     if not token:
         raise HTTPException(status_code=400, detail="Bot token kiritilmadi!")
 
+    # Obuna faolligini tekshirish
+    from app.subscription_guard import check_bot_connect_allowed
+    await check_bot_connect_allowed(db, org_id)
+
     try:
         # 1. Validate Token via Telegram API getMe
         async with httpx.AsyncClient(timeout=10.0) as client:

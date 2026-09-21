@@ -136,28 +136,11 @@ async def create_product(
     org_id: UUID = Depends(get_current_organization_id),
     db: AsyncSession = Depends(get_db)
 ):
-    # Check subscription product limits
-    from app.models import Subscription, Plan
-    sub_res = await db.execute(select(Subscription).where(Subscription.organization_id == org_id))
-    sub = sub_res.scalars().first()
-    if sub:
-        plan_res = await db.execute(select(Plan).where(Plan.id == sub.plan_id))
-        plan = plan_res.scalars().first()
-        if plan and plan.limits_json and "products" in plan.limits_json:
-            limit = plan.limits_json["products"]
-            curr_prods_cnt = len((await db.execute(select(Product).where(Product.organization_id == org_id, Product.is_active == True))).scalars().all())
-            if curr_prods_cnt >= limit:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Sizning tarifingizda mahsulotlar soni cheklangan ({limit} ta). Ko'proq mahsulot qo'shish uchun tarifingizni yangilang!"
-                )
-        if plan and plan.limits_json and "max_media_per_product" in plan.limits_json:
-            max_media = plan.limits_json["max_media_per_product"]
-            if len(data.media or []) > max_media:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Sizning tarifingizda bitta mahsulotga ko'pi bilan {max_media} ta rasm/video yuklash mumkin. Ko'proq media yuklash uchun tarifingizni yangilang!"
-                )
+    # Check active subscription and plan limits
+    from app.subscription_guard import check_product_create_limit, check_product_media_limit, require_active_subscription
+    await check_product_create_limit(db, org_id)
+    if data.media:
+        await check_product_media_limit(db, org_id, data.media)
 
     sku_final = data.sku.strip() if data.sku and data.sku.strip() else generate_default_sku(data.name)
 
@@ -238,6 +221,12 @@ async def update_product(
     product = res.scalars().first()
     if not product:
         raise HTTPException(status_code=404, detail="Mahsulot topilmadi")
+
+    # Enforce active subscription to modify products
+    from app.subscription_guard import require_active_subscription, check_product_media_limit
+    await require_active_subscription(db, org_id)
+    if data.media:
+        await check_product_media_limit(db, org_id, data.media)
 
     if data.name is not None:
         product.name = data.name

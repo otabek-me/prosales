@@ -30,7 +30,7 @@ export default function NotificationsPage() {
   }, []);
 
   const markAllRead = () => {
-    markAllNotificationsRead();
+    markAllNotificationsRead(notifications);
     setNotifications((prev) => prev.map((n: any) => ({ ...n, unread: false })));
   };
 
@@ -65,8 +65,9 @@ export default function NotificationsPage() {
         <div className="flex flex-col gap-3">
           {notifications.map((n: any, i: number) => (
             <Link
-              key={i}
+              key={n.id || i}
               href={n.link || '/dashboard'}
+              onClick={() => markNotificationRead(n.id, n.created_at)}
               className="glass-panel flex items-start gap-4 p-5 rounded-xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/50 transition-all duration-300"
             >
               <span className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/60 text-lg">

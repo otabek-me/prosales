@@ -866,7 +866,22 @@ async def telegram_webhook(
                 )
                 return {"status": "handled_products_empty"}
 
-        # 7. AI SALES ENGINE BILAN JAVOB TAYYORLASH
+        # 7. TASHKILOTNING OBUNA VA TARIF MUDDATINI TEKSHIRISH
+        from app.subscription_guard import get_org_subscription
+        sub_obj, plan_obj, is_sub_active = await get_org_subscription(db, resolved_org_id)
+        if not is_sub_active:
+            conversation.is_operator_mode = True
+            conversation.unread_count += 1
+            await db.commit()
+            expired_msg = (
+                "⚠️ *Diqqat:* Ushbu do'konning avtomatlashtirilgan xizmat ko'rsatish obuna muddati "
+                "yakunlanganligi sababli AI yordamchisi vaqtincha to'xtatildi.\n\n"
+                "Xabaringiz do'kon operatoriga yo'naltirildi. Iltimos, operator javobini kuting."
+            )
+            await send_telegram_message(plain_bot_token, chat_id, expired_msg, MAIN_KEYBOARD)
+            return {"status": "handled_subscription_expired"}
+
+        # 8. AI SALES ENGINE BILAN JAVOB TAYYORLASH
         ai_reply_text, tool_calls_made, is_handoff = await ai_engine.generate_response(
             db, organization, customer, conversation, text_content
         )

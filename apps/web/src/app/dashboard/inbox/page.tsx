@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { MessageSquare, Send, Loader2, Bot, User, Radio, MessageCircle, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 import { apiGet, apiPost, apiPut } from '@/lib/api';
+import { markNotificationRead } from '@/lib/notifications';
 
 export default function InboxPage() {
   const searchParams = useSearchParams();
@@ -73,6 +74,7 @@ export default function InboxPage() {
   const selectConversation = async (conv: any) => {
     setSelectedConv(conv);
     setMsgLoading(true);
+    markNotificationRead('op_' + conv.id, conv.last_message_at);
     try {
       const res = await apiGet(`/conversations/${conv.id}/messages`);
       setMessages(res.data || []);

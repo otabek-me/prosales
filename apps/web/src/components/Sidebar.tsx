@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   Sparkles
 } from 'lucide-react';
+import { apiGet } from '@/lib/api';
 
 const menuItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -33,6 +34,23 @@ const menuItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('is_superadmin');
+      if (cached === 'true') setIsSuperAdmin(true);
+    } catch {}
+
+    apiGet('/auth/me').then(res => {
+      const user = res?.data?.user;
+      const sa = Boolean(user?.is_superadmin);
+      setIsSuperAdmin(sa);
+      try {
+        localStorage.setItem('is_superadmin', sa ? 'true' : 'false');
+      } catch {}
+    }).catch(() => {});
+  }, []);
 
   return (
     <aside className="w-64 flex-shrink-0 h-full border-r border-slate-800/60 bg-[#0a0d14] hidden md:flex flex-col justify-between p-4 overflow-hidden">
@@ -86,16 +104,18 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      {/* Super Admin Quick Link */}
-      <div className="pt-4 border-t border-slate-800">
-        <Link
-          href="/superadmin"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/25 hover:border-purple-500/40 hover:text-purple-300 transition-all"
-        >
-          <ShieldAlert className="w-4 h-4" />
-          <span>Super Admin Platform</span>
-        </Link>
-      </div>
+      {/* Super Admin Quick Link - ONLY visible to SuperAdmin users */}
+      {isSuperAdmin && (
+        <div className="pt-4 border-t border-slate-800">
+          <Link
+            href="/superadmin"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/25 hover:border-purple-500/40 hover:text-purple-300 transition-all"
+          >
+            <ShieldAlert className="w-4 h-4" />
+            <span>Super Admin Platform</span>
+          </Link>
+        </div>
+      )}
     </aside>
   );
 }

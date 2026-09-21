@@ -1,6 +1,7 @@
 import React from 'react';
 import Sidebar from '../../components/Sidebar';
 import Navbar from '../../components/Navbar';
+import SubscriptionAlertBanner from '../../components/SubscriptionAlertBanner';
 
 // Mark the whole /dashboard/* tree as dynamic so prerendered (stale) routes are
 // never served. This segment config MUST live on a Server Component (layout) —
@@ -21,6 +22,7 @@ export default function DashboardLayout({
         <Navbar />
         <main className="p-4 sm:p-6 lg:p-8 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-[1400px] w-full">
+            <SubscriptionAlertBanner />
             {children}
           </div>
         </main>

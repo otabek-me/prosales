@@ -111,34 +111,40 @@ async def get_notifications(
 
     for c in conversations:
         name = c.customer.first_name or c.customer.username or "Mijoz"
+        last_time = c.last_message_at or datetime.utcnow()
         items.append({
+            "id": f"op_{c.id}",
             "type": "operator_request",
             "title": f"👨‍💼 Operator so'rovi: {name}",
             "body": "Mijoz operator bilan bog'lanishni kutmoqda",
             "unread": bool(c.unread_count > 0),
             "link": "/dashboard/inbox",
-            "created_at": c.last_message_at.isoformat(),
+            "created_at": last_time.isoformat() + "Z",
         })
 
     for o in pending_orders:
+        created_time = o.created_at or datetime.utcnow()
         items.append({
+            "id": f"order_{o.id}",
             "type": "new_order",
             "title": f"🛒 Yangi buyurtma #{o.order_number}",
             "body": f"{o.customer_name or 'Mijoz'} • {float(o.total_amount or 0):,.0f} {o.currency or 'UZS'}",
             "unread": True,
             "link": "/dashboard/orders",
-            "created_at": o.created_at.isoformat(),
+            "created_at": created_time.isoformat() + "Z",
         })
 
     for cu in new_customers:
+        created_time = cu.created_at or datetime.utcnow()
         name = cu.first_name or cu.username or "Mijoz"
         items.append({
+            "id": f"cust_{cu.id}",
             "type": "new_customer",
             "title": f"🆕 Yangi mijoz: {name}",
             "body": f"(Telegram: {cu.telegram_id or '-'})",
             "unread": True,
             "link": "/dashboard/customers",
-            "created_at": cu.created_at.isoformat(),
+            "created_at": created_time.isoformat() + "Z",
         })
 
     # Vaqt bo'yicha saralash (eng yangisi birinchi)

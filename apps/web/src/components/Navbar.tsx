@@ -228,7 +228,7 @@ export default function Navbar() {
               <div className="p-3 border-b border-slate-800 flex items-center justify-between flex-shrink-0">
                 <span className="text-sm font-bold text-white flex items-center gap-2"><Bell className="w-4 h-4 text-indigo-400" /> Bildirishnomalar</span>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => { markAllNotificationsRead(); setNotifications((prev: any) => prev.map((n: any) => ({ ...n, unread: false }))); setNotificationCount(0); setOperatorAlert(0); }} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors" title="Barchasini o'qilgan qilish"><CheckCheck className="w-4 h-4" /></button>
+                  <button onClick={() => { markAllNotificationsRead(notifications); setNotifications((prev: any) => prev.map((n: any) => ({ ...n, unread: false }))); setNotificationCount(0); setOperatorAlert(0); }} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors" title="Barchasini o'qilgan qilish"><CheckCheck className="w-4 h-4" /></button>
                   <button onClick={() => setNotifOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" title="Yopish"><X className="w-4 h-4" /></button>
                 </div>
               </div>
@@ -252,7 +252,7 @@ export default function Navbar() {
                   notifications
                     .filter((n: any) => notifFilter === 'all' || (notifFilter === 'operator' ? n.type === 'operator_request' : n.type === 'new_order'))
                     .map((n: any, i: number) => (
-                      <Link key={i} href={n.link || '/dashboard/notifications'} onClick={() => { markNotificationRead(n.created_at); setNotifOpen(false); loadNotifications(); }} className={'flex items-start gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-colors border border-transparent ' + (n.unread ? 'bg-indigo-500/10 border-indigo-500/20' : '')}>
+                      <Link key={n.id || i} href={n.link || '/dashboard/notifications'} onClick={() => { markNotificationRead(n.id, n.created_at); setNotifOpen(false); setNotifications((prev: any) => prev.map((item: any) => (item.id === n.id ? { ...item, unread: false } : item))); setNotificationCount((cnt: number) => Math.max(0, cnt - 1)); if (n.type === 'operator_request') setOperatorAlert((cnt: number) => Math.max(0, cnt - 1)); }} className={'flex items-start gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-colors border border-transparent ' + (n.unread ? 'bg-indigo-500/10 border-indigo-500/20' : '')}>
                         <span className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg bg-slate-800 border border-slate-700/60">
                           {n.type === 'operator_request' ? <User className="w-4 h-4 text-amber-400" /> : n.type === 'new_order' ? <ShoppingCart className="w-4 h-4 text-emerald-400" /> : <Sparkles className="w-4 h-4 text-indigo-400" />}
                         </span>
@@ -273,9 +273,23 @@ export default function Navbar() {
           )}
 
         </div>
-        <Link href="/dashboard/inbox" className="p-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-300 hover:text-white relative transition-colors" title="Jonli xabarlar">
+        <Link
+          href="/dashboard/inbox"
+          onClick={() => {
+            notifications.forEach((n: any) => {
+              if (n.type === 'operator_request') {
+                markNotificationRead(n.id, n.created_at);
+              }
+            });
+            setOperatorAlert(0);
+          }}
+          className="p-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-300 hover:text-white relative transition-colors"
+          title="Jonli xabarlar"
+        >
           <MessageSquare className="w-4 h-4" />
-          {operatorAlert > 0 && (<span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-slate-900 animate-ping" />)}
+          {operatorAlert > 0 && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-slate-900 shadow-[0_0_8px_rgba(251,191,36,0.9)]" />
+          )}
         </Link>
         <div className="relative" ref={profileRef}>
           <button onClick={() => { setProfileOpen((v: any) => !v); if (!profile) loadProfile(); }} className="flex items-center gap-2 pl-2 border-l border-slate-800 py-1.5 pr-1 rounded-xl hover:bg-slate-800/40 transition-colors" title="Profil">
