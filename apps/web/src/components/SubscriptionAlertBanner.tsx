@@ -30,10 +30,34 @@ export default function SubscriptionAlertBanner() {
 
   if (loading || !sub) return null;
 
-  const isExpired = sub.status === 'EXPIRED' || sub.is_active === false || sub.days_left <= 0;
-  const isExpiringSoon = !isExpired && sub.days_left <= 3;
+  const isBlocked = sub.is_blocked === true || sub.is_org_active === false || sub.status === 'BLOCKED';
+  const isExpired = !isBlocked && (sub.status === 'EXPIRED' || sub.is_active === false || sub.days_left <= 0);
+  const isExpiringSoon = !isBlocked && !isExpired && sub.days_left <= 3;
 
-  if (!isExpired && !isExpiringSoon) return null;
+  if (!isBlocked && !isExpired && !isExpiringSoon) return null;
+
+  if (isBlocked) {
+    return (
+      <div className="mb-5 p-4 rounded-2xl bg-gradient-to-r from-red-950 via-rose-950 to-black border-2 border-red-600 shadow-2xl shadow-red-950/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-pulse">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-red-600/30 text-red-400 flex items-center justify-center shrink-0 border border-red-500">
+            <ShieldAlert className="w-6 h-6 text-red-500" />
+          </div>
+          <div>
+            <h4 className="text-sm font-black text-white flex items-center gap-2 tracking-wide uppercase">
+              🚫 BIZNESINGIZ MA&apos;MURIYAT TOMONIDAN BLOKLANGAN!
+            </h4>
+            <p className="text-xs text-red-200 mt-0.5 leading-relaxed font-medium">
+              Ushbu do&apos;kon va barcha xizmatlar (tovarlar, buyurtmalar, Telegram AI bot) xavfsizlik yoki qoidabuzarlik sababli to&apos;xtatildi.
+            </p>
+          </div>
+        </div>
+        <div className="px-4 py-2 rounded-xl bg-red-800/80 text-white font-bold text-xs border border-red-600 shrink-0">
+          Xizmatlar to&apos;xtatilgan
+        </div>
+      </div>
+    );
+  }
 
   if (isExpired) {
     return (

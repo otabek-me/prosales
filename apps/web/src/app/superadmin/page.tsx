@@ -879,6 +879,16 @@ export default function SuperAdminDashboard() {
         </div>
       )}
 
+      {/* LOADING OVERLAY WHEN FETCHING DETAILS */}
+      {detailsLoading && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 flex items-center gap-3 text-white shadow-2xl animate-fade-in">
+            <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+            <span className="text-sm font-bold">Biznes ma&apos;lumotlari yuklanmoqda...</span>
+          </div>
+        </div>
+      )}
+
       {/* MODAL 1: BROWSE BUSINESS DETAILS (To'liq barcha ma'lumotlar oynasi) */}
       {viewingDetails && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">

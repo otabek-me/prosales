@@ -102,7 +102,8 @@ export default function Navbar() {
   useEffect(() => {
     loadProfile();
     loadNotifications();
-    const timer = setInterval(() => { loadNotifications(); loadProfile(); }, 15000);
+    // Faqat bildirishnomalarni me'yorda (45 soniyada) yangilash, profile esa o'zgarmaydi
+    const timer = setInterval(loadNotifications, 45000);
     return () => clearInterval(timer);
   }, [loadProfile, loadNotifications]);
 

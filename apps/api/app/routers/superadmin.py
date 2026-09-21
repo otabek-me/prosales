@@ -186,55 +186,75 @@ async def get_system_metrics(db: AsyncSession = Depends(get_db)):
 
 @router.get("/businesses", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
 async def list_all_businesses(db: AsyncSession = Depends(get_db)):
+    """Barcha bizneslarni yuqori tezlikda (batch aggregation) yuklash."""
     res = await db.execute(select(Organization).order_by(Organization.created_at.desc()))
     orgs = res.scalars().all()
-    
-    data = []
+    if not orgs:
+        return StandardResponse(success=True, data=[])
+
+    org_ids = [o.id for o in orgs]
     now = datetime.utcnow()
+
+    # 1. Barcha obunalar va planlar bir vaqtda
+    subs_res = await db.execute(
+        select(Subscription, Plan)
+        .outerjoin(Plan, Plan.id == Subscription.plan_id)
+        .where(Subscription.organization_id.in_(org_ids))
+    )
+    subs_map = {sub.organization_id: (sub, plan) for sub, plan in subs_res.all()}
+
+    # 2. Barcha Telegram botlar bir vaqtda
+    bots_res = await db.execute(
+        select(TelegramBot).where(TelegramBot.organization_id.in_(org_ids))
+    )
+    bots_map = {b.organization_id: b for b in bots_res.scalars().all()}
+
+    # 3. Barcha Ownerlar bir vaqtda
+    owners_res = await db.execute(
+        select(Membership.organization_id, User)
+        .join(User, User.id == Membership.user_id)
+        .where(Membership.organization_id.in_(org_ids), Membership.role == RoleEnum.OWNER)
+    )
+    owners_map = {org_id: u for org_id, u in owners_res.all()}
+
+    # 4. Mahsulotlar soni - bitta aggregate query
+    prod_counts_res = await db.execute(
+        select(Product.organization_id, func.count(Product.id))
+        .where(Product.organization_id.in_(org_ids))
+        .group_by(Product.organization_id)
+    )
+    prod_counts_map = dict(prod_counts_res.all())
+
+    # 5. Buyurtmalar soni va daromad - bitta aggregate query
+    orders_res = await db.execute(
+        select(
+            Order.organization_id,
+            func.count(Order.id),
+            func.coalesce(func.sum(Order.total_amount), 0)
+        )
+        .where(Order.organization_id.in_(org_ids), Order.status != OrderStatusEnum.CANCELLED)
+        .group_by(Order.organization_id)
+    )
+    orders_map = {org_id: (cnt, float(rev)) for org_id, cnt, rev in orders_res.all()}
+
+    data = []
     for o in orgs:
-        # Obuna ma'lumotlari
-        sub_res = await db.execute(select(Subscription).where(Subscription.organization_id == o.id))
-        sub = sub_res.scalars().first()
-        plan_name = "Obunasiz"
-        sub_status = "NO_SUB"
+        sub_info = subs_map.get(o.id)
+        sub, plan = sub_info if sub_info else (None, None)
+        plan_name = plan.name if plan else "Obunasiz"
+        plan_id_str = str(sub.plan_id) if sub and sub.plan_id else None
         days_left = 0
-        plan_id_str = None
+        sub_status = "NO_SUB"
         if sub:
-            plan_res = await db.execute(select(Plan).where(Plan.id == sub.plan_id))
-            plan = plan_res.scalars().first()
-            plan_name = plan.name if plan else "Noma'lum"
-            plan_id_str = str(sub.plan_id)
             is_expired = sub.current_period_end and sub.current_period_end < now
-            sub_status = "EXPIRED" if is_expired else sub.status.value
+            sub_status = "EXPIRED" if is_expired else getattr(sub.status, 'value', str(sub.status))
             if sub.current_period_end:
                 days_left = max(0, (sub.current_period_end - now).days)
 
-        # Mahsulotlar soni
-        prod_count = (await db.execute(
-            select(func.count(Product.id)).where(Product.organization_id == o.id)
-        )).scalar() or 0
-
-        # Buyurtmalar soni va jami daromad
-        orders_res = await db.execute(
-            select(Order).where(Order.organization_id == o.id, Order.status != OrderStatusEnum.CANCELLED)
-        )
-        orders = orders_res.scalars().all()
-        order_count = len(orders)
-        total_revenue = sum(float(ord_item.total_amount or 0) for ord_item in orders)
-
-        # Biznes egasi (Owner) ma'lumotlari
-        owner_res = await db.execute(
-            select(User)
-            .join(Membership, Membership.user_id == User.id)
-            .where(Membership.organization_id == o.id, Membership.role == RoleEnum.OWNER)
-        )
-        owner = owner_res.scalars().first()
-
-        # Bot ma'lumotlari
-        bot_res = await db.execute(
-            select(TelegramBot).where(TelegramBot.organization_id == o.id)
-        )
-        tg_bot = bot_res.scalars().first()
+        owner = owners_map.get(o.id)
+        tg_bot = bots_map.get(o.id)
+        prod_count = prod_counts_map.get(o.id, 0)
+        order_count, total_revenue = orders_map.get(o.id, (0, 0.0))
 
         data.append({
             "id": str(o.id),
@@ -243,7 +263,7 @@ async def list_all_businesses(db: AsyncSession = Depends(get_db)):
             "phone": o.phone,
             "category": o.category,
             "is_active": o.is_active,
-            "created_at": o.created_at.isoformat(),
+            "created_at": o.created_at.isoformat() if o.created_at else "-",
             "owner": {
                 "id": str(owner.id) if owner else None,
                 "full_name": owner.full_name if owner else "Noma'lum",
@@ -252,7 +272,7 @@ async def list_all_businesses(db: AsyncSession = Depends(get_db)):
             } if owner else None,
             "bot": {
                 "username": tg_bot.bot_username if tg_bot else None,
-                "status": tg_bot.status if tg_bot else "DISCONNECTED"
+                "status": getattr(tg_bot, 'status', 'DISCONNECTED') if tg_bot else "DISCONNECTED"
             } if tg_bot else None,
             "subscription": {
                 "plan_name": plan_name,
@@ -702,8 +722,8 @@ async def get_business_details(org_id: str, db: AsyncSession = Depends(get_db)):
                 "id": str(sub.id) if sub else None,
                 "plan_name": plan.name if plan else "Obunasiz",
                 "plan_slug": plan.slug if plan else None,
-                "price_monthly": float(plan.price_monthly) if plan else 0,
-                "status": "EXPIRED" if sub and sub.current_period_end and sub.current_period_end < now else (sub.status.value if sub else "NO_SUB"),
+                "price_monthly": float(plan.price_monthly) if plan and hasattr(plan, 'price_monthly') else 0,
+                "status": "EXPIRED" if sub and sub.current_period_end and sub.current_period_end < now else (getattr(sub.status, 'value', str(sub.status)) if sub else "NO_SUB"),
                 "days_left": days_left,
                 "period_start": sub.current_period_start.strftime("%Y-%m-%d %H:%M") if sub and sub.current_period_start else None,
                 "period_end": sub.current_period_end.strftime("%Y-%m-%d %H:%M") if sub and sub.current_period_end else None
@@ -711,7 +731,7 @@ async def get_business_details(org_id: str, db: AsyncSession = Depends(get_db)):
             "ai_settings": {
                 "bot_name": ai_settings.bot_name if ai_settings else "AI Sotuvchi",
                 "personality": ai_settings.personality if ai_settings else "-",
-                "system_instructions": ai_settings.system_instructions if ai_settings else None,
+                "system_instructions": getattr(ai_settings, "custom_instructions", None) if ai_settings else None,
                 "model": getattr(ai_settings, "model", None) or "llama-3.3-70b-versatile"
             } if ai_settings else None,
             "stats": {
@@ -736,7 +756,7 @@ async def get_business_details(org_id: str, db: AsyncSession = Depends(get_db)):
                     "order_number": o.order_number,
                     "customer_name": o.customer_name or "Mijoz",
                     "total_amount": float(o.total_amount or 0),
-                    "status": o.status.value,
+                    "status": getattr(o.status, 'value', str(o.status)),
                     "created_at": o.created_at.strftime("%Y-%m-%d %H:%M") if o.created_at else "-"
                 }
                 for o in recent_orders
@@ -745,7 +765,7 @@ async def get_business_details(org_id: str, db: AsyncSession = Depends(get_db)):
                 {
                     "id": str(pay.id),
                     "amount": float(pay.amount or 0),
-                    "status": pay.status.value,
+                    "status": getattr(pay.status, 'value', str(pay.status)),
                     "sender_name": pay.sender_name,
                     "created_at": pay.created_at.strftime("%Y-%m-%d %H:%M") if pay.created_at else "-"
                 }

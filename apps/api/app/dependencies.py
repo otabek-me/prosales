@@ -41,6 +41,8 @@ async def get_current_organization_id(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> UUID:
+    target_org_id: Optional[UUID] = None
+
     # If user provided X-Organization-Id header, verify user is member of it
     if x_organization_id and x_organization_id not in ("undefined", "null", ""):
         try:
@@ -56,16 +58,28 @@ async def get_current_organization_id(
         membership = result.scalars().first()
         if not membership and not current_user.is_superadmin:
             raise HTTPException(status_code=403, detail="Access denied to this organization")
-        return org_uuid
+        target_org_id = org_uuid
+    else:
+        # Otherwise pick first membership
+        result = await db.execute(
+            select(Membership).where(Membership.user_id == current_user.id)
+        )
+        membership = result.scalars().first()
+        if not membership:
+            raise HTTPException(status_code=400, detail="User does not belong to any organization")
+        target_org_id = membership.organization_id
 
-    # Otherwise pick first membership
-    result = await db.execute(
-        select(Membership).where(Membership.user_id == current_user.id)
-    )
-    membership = result.scalars().first()
-    if not membership:
-        raise HTTPException(status_code=400, detail="User does not belong to any organization")
-    return membership.organization_id
+    # Qat'iy tekshiruv: Agar biznes bloklangan bo'lsa (is_active == False)
+    if not current_user.is_superadmin:
+        org_res = await db.execute(select(Organization).where(Organization.id == target_org_id))
+        org = org_res.scalars().first()
+        if not org or not org.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="⚠️ Sizning biznesingiz (do'koningiz) ma'muriyat tomonidan bloklangan. Xizmatlardan foydalanish cheklangan."
+            )
+
+    return target_org_id
 
 class RequirePermission:
     def __init__(self, required_permission: str):

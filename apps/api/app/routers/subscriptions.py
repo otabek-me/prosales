@@ -217,17 +217,22 @@ async def get_current_subscription(
     current_products_count = len(prod_count_res.scalars().all())
 
     conv_count_res = await db.execute(select(Conversation).where(Conversation.organization_id == org_id))
-    current_conv_count = len(conv_count_res.scalars().all())
+    org_res = await db.execute(select(Organization).where(Organization.id == org_id))
+    org = org_res.scalars().first()
+    is_org_active = org.is_active if org else True
 
     is_expired = datetime.utcnow() > sub.current_period_end
+    is_active = is_org_active and (sub.status in [SubscriptionStatusEnum.ACTIVE, SubscriptionStatusEnum.TRIAL]) and not is_expired
 
     return StandardResponse(
         success=True,
         data={
             "subscription_id": str(sub.id),
-            "status": "EXPIRED" if is_expired else sub.status.value,
+            "status": "BLOCKED" if not is_org_active else ("EXPIRED" if is_expired else sub.status.value),
             "is_trial": sub.status == SubscriptionStatusEnum.TRIAL,
-            "is_active": sub.status in [SubscriptionStatusEnum.ACTIVE, SubscriptionStatusEnum.TRIAL] and not is_expired,
+            "is_active": is_active,
+            "is_org_active": is_org_active,
+            "is_blocked": not is_org_active,
             "current_period_start": sub.current_period_start.isoformat(),
             "current_period_end": sub.current_period_end.isoformat(),
             "days_left": max(0, (sub.current_period_end - datetime.utcnow()).days),
