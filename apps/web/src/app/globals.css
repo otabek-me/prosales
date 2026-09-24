@@ -217,6 +217,10 @@ h1, h2, h3, .font-display {
   0% { background-position: -400px 0; }
   100% { background-position: 400px 0; }
 }
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
 
 /* ===== Animation utilities (Sokin, silliq va ko'zga yoqimli tezlikda) ===== */
 .animate-fade-in-up { animation: fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }

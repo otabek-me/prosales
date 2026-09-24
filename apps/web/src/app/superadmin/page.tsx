@@ -21,7 +21,7 @@ export default function SuperAdminDashboard() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'BUSINESSES' | 'PAYMENTS' | 'ADMINS'>('BUSINESSES');
+  const [activeTab, setActiveTab] = useState<'BUSINESSES' | 'PAYMENTS' | 'PAY_METHODS' | 'ADMINS'>('BUSINESSES');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'BLOCKED' | 'EXPIRED'>('ALL');
@@ -57,6 +57,24 @@ export default function SuperAdminDashboard() {
   });
   const [grantEmail, setGrantEmail] = useState('');
 
+  // 6. Payment Methods State
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [showMethodModal, setShowMethodModal] = useState(false);
+  const [editingMethod, setEditingMethod] = useState<any | null>(null);
+  const [methodFormData, setMethodFormData] = useState({
+    name: '',
+    provider: 'click',
+    card_number: '',
+    card_holder: '',
+    bank_name: '',
+    phone_number: '',
+    deep_link: '',
+    instructions: '',
+    is_active: true,
+    display_order: 1
+  });
+  const [copiedCardId, setCopiedCardId] = useState<string | null>(null);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -75,18 +93,20 @@ export default function SuperAdminDashboard() {
     try {
       setLoading(true);
       setError('');
-      const [mRes, bRes, pRes, aRes, plRes] = await Promise.all([
+      const [mRes, bRes, pRes, aRes, plRes, pmRes] = await Promise.all([
         apiGet('/superadmin/metrics').catch(() => ({ data: {} })),
         apiGet('/superadmin/businesses').catch(() => ({ data: [] })),
         apiGet('/superadmin/payments').catch(() => ({ data: [] })),
         apiGet('/superadmin/admins').catch(() => ({ data: [] })),
         apiGet('/subscriptions/plans').catch(() => ({ data: [] })),
+        apiGet('/superadmin/payment-methods').catch(() => ({ data: [] })),
       ]);
       setMetrics(mRes.data || {});
       setBusinesses(bRes.data || []);
       setPayments(pRes.data || []);
       setAdmins(aRes.data || []);
       setPlans(plRes.data || []);
+      setPaymentMethods(pmRes.data || []);
     } catch (err: any) {
       setError(err.message || 'Superadmin huquqi talab qilinadi.');
     } finally {
@@ -326,6 +346,93 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  // Payment Methods Handlers
+  const handleOpenAddMethod = () => {
+    setEditingMethod(null);
+    setMethodFormData({
+      name: "Click orqali to'lov",
+      provider: 'click',
+      card_number: '',
+      card_holder: '',
+      bank_name: '',
+      phone_number: '',
+      deep_link: '',
+      instructions: "Click ilovasida 'Kartaga o'tkazish' bo'limiga kiring, kartani kiriting va to'lang.",
+      is_active: true,
+      display_order: paymentMethods.length + 1
+    });
+    setShowMethodModal(true);
+  };
+
+  const handleOpenEditMethod = (m: any) => {
+    setEditingMethod(m);
+    setMethodFormData({
+      name: m.name || '',
+      provider: m.provider || 'click',
+      card_number: m.card_number || '',
+      card_holder: m.card_holder || '',
+      bank_name: m.bank_name || '',
+      phone_number: m.phone_number || '',
+      deep_link: m.deep_link || '',
+      instructions: m.instructions || '',
+      is_active: m.is_active ?? true,
+      display_order: m.display_order || 1
+    });
+    setShowMethodModal(true);
+  };
+
+  const handleSaveMethod = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!methodFormData.name.trim() || !methodFormData.card_number.trim() || !methodFormData.card_holder.trim()) {
+      showNotification("Nomi, karta raqami va karta egasi kiritilishi shart!", true);
+      return;
+    }
+    setActionLoading('save_method');
+    try {
+      if (editingMethod) {
+        await apiPut(`/superadmin/payment-methods/${editingMethod.id}`, methodFormData);
+        showNotification(`'${methodFormData.name}' to'lov usuli yangilandi!`);
+      } else {
+        await apiPost('/superadmin/payment-methods', methodFormData);
+        showNotification(`'${methodFormData.name}' to'lov usuli muvaffaqiyatli qo'shildi!`);
+      }
+      setShowMethodModal(false);
+      setEditingMethod(null);
+      await loadData();
+    } catch (err: any) {
+      showNotification(err.message || "To'lov usulini saqlashda xatolik", true);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleToggleMethod = async (methodId: string) => {
+    setActionLoading(`toggle_${methodId}`);
+    try {
+      const res = await apiPost(`/superadmin/payment-methods/${methodId}/toggle`, {});
+      showNotification(res.data?.message || "Holat o'zgartirildi!");
+      await loadData();
+    } catch (err: any) {
+      showNotification(err.message || "Xatolik yuz berdi", true);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeleteMethod = async (methodId: string, name: string) => {
+    if (!confirm(`Haqiqatan ham '${name}' to'lov usulini o'chirmoqchimisiz?`)) return;
+    setActionLoading(`del_${methodId}`);
+    try {
+      await apiDelete(`/superadmin/payment-methods/${methodId}`);
+      showNotification(`'${name}' to'lov usuli o'chirildi.`);
+      await loadData();
+    } catch (err: any) {
+      showNotification(err.message || "O'chirishda xatolik", true);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const pendingPaymentsCount = payments.filter(p => p.status === 'PENDING').length;
 
   const filteredBusinesses = businesses.filter(b => {
@@ -436,10 +543,10 @@ export default function SuperAdminDashboard() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3">
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-3 overflow-x-auto whitespace-nowrap scrollbar-none">
         <button
           onClick={() => setActiveTab('BUSINESSES')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
             activeTab === 'BUSINESSES'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : 'text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800'
@@ -450,7 +557,7 @@ export default function SuperAdminDashboard() {
         </button>
         <button
           onClick={() => setActiveTab('PAYMENTS')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
             activeTab === 'PAYMENTS'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : 'text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800'
@@ -460,8 +567,19 @@ export default function SuperAdminDashboard() {
           <span>To&apos;lov So&apos;rovlari ({pendingPaymentsCount})</span>
         </button>
         <button
+          onClick={() => setActiveTab('PAY_METHODS')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
+            activeTab === 'PAY_METHODS'
+              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+              : 'text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800'
+          }`}
+        >
+          <DollarSign className="w-4 h-4" />
+          <span>To&apos;lov Usullari ({paymentMethods.length})</span>
+        </button>
+        <button
           onClick={() => setActiveTab('ADMINS')}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 ${
             activeTab === 'ADMINS'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
               : 'text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800'
@@ -879,6 +997,147 @@ export default function SuperAdminDashboard() {
         </div>
       )}
 
+      {/* TAB 4: PAYMENT METHODS MANAGEMENT */}
+      {activeTab === 'PAY_METHODS' && (
+        <div className="p-4 sm:p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 space-y-5 shadow-xl">
+          {/* Header row */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-purple-400" />
+                To&apos;lov Usullari va Tizimlari Boshqaruvi
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Foydalanuvchilar tarif sotib olishda ko&apos;radigan to&apos;lov tizimlari (Click, Payme, Uzcard/Humo, Uzum Bank). Pul to&apos;g&apos;ridan-to&apos;g&apos;ri sizning plastik kartangizga tushadi!
+              </p>
+            </div>
+            <button
+              onClick={handleOpenAddMethod}
+              className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-lg shadow-purple-600/30 flex-shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Yangi To&apos;lov Usuli</span>
+            </button>
+          </div>
+
+          {/* Cards Grid */}
+          {paymentMethods.length === 0 ? (
+            <div className="p-12 text-center text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800">
+              <CreditCard className="w-12 h-12 mx-auto mb-3 text-slate-600" />
+              <p className="text-sm font-semibold text-slate-400">Hozircha to&apos;lov usullari qo&apos;shilmagan</p>
+              <p className="text-xs text-slate-500 mt-1">Tepada &apos;Yangi To&apos;lov Usuli&apos; tugmasi orqali Click, Payme yoki Plastik kartangizni qo&apos;shing.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {paymentMethods.map((m) => {
+                const providerBadgeColors: Record<string, string> = {
+                  click: 'from-blue-600 to-sky-500 text-blue-200 border-blue-500/40',
+                  payme: 'from-cyan-600 to-teal-500 text-cyan-200 border-cyan-500/40',
+                  card: 'from-indigo-600 to-purple-500 text-indigo-200 border-indigo-500/40',
+                  uzum: 'from-purple-600 to-fuchsia-500 text-purple-200 border-purple-500/40',
+                };
+                const badgeClass = providerBadgeColors[m.provider] || providerBadgeColors.card;
+
+                return (
+                  <div
+                    key={m.id}
+                    className={`p-5 rounded-2xl bg-slate-950/80 border transition-all duration-200 flex flex-col justify-between space-y-4 ${
+                      m.is_active ? 'border-slate-800 hover:border-slate-700 shadow-lg' : 'border-red-900/30 opacity-60'
+                    }`}
+                  >
+                    <div>
+                      {/* Top badges */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-gradient-to-r ${badgeClass} border`}>
+                          {m.provider}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleToggleMethod(m.id)}
+                            disabled={actionLoading === `toggle_${m.id}`}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all border ${
+                              m.is_active
+                                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
+                                : 'bg-red-500/15 text-red-400 border-red-500/30 hover:bg-red-500/25'
+                            }`}
+                            title="Holatni o'zgartirish"
+                          >
+                            {m.is_active ? '● Faol' : '○ Nofaol'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Name */}
+                      <h4 className="text-base font-bold text-white mt-3 truncate">{m.name}</h4>
+
+                      {/* Card Number */}
+                      <div className="mt-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Karta Raqami</span>
+                          <span className="text-sm font-mono font-bold text-white tracking-wider">{m.card_number}</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText((m.card_number || '').replace(/\s+/g, ''));
+                            setCopiedCardId(m.id);
+                            setTimeout(() => setCopiedCardId(null), 2000);
+                          }}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                          title="Nusxa olish"
+                        >
+                          {copiedCardId === m.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+
+                      {/* Details row */}
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-slate-500 text-[10px] block">Karta Egasi</span>
+                          <span className="font-semibold text-slate-200 truncate block">{m.card_holder}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 text-[10px] block">Bank Nomi</span>
+                          <span className="font-semibold text-slate-200 truncate block">{m.bank_name || '—'}</span>
+                        </div>
+                      </div>
+
+                      {/* Instructions preview */}
+                      {m.instructions && (
+                        <p className="mt-3 text-[11px] text-slate-400 line-clamp-2 italic bg-slate-900/40 p-2 rounded-lg border border-slate-800/60">
+                          &ldquo;{m.instructions}&rdquo;
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Actions footer */}
+                    <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-500 font-mono">Tartib: #{m.display_order}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleOpenEditMethod(m)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1 transition-all"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Tahrirlash</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMethod(m.id, m.name)}
+                          disabled={actionLoading === `del_${m.id}`}
+                          className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 border border-red-500/30 transition-all disabled:opacity-50"
+                          title="O'chirish"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* LOADING OVERLAY WHEN FETCHING DETAILS */}
       {detailsLoading && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1183,6 +1442,164 @@ export default function SuperAdminDashboard() {
                 <span>Saqlash & Faollashtirish</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: ADD / EDIT PAYMENT METHOD */}
+      {showMethodModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto bg-[#0c101c] border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-5 animate-fade-in">
+            <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-purple-400" />
+                  {editingMethod ? "To'lov Usulini Tahrirlash" : "Yangi To'lov Usuli Qo'shish"}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Mijozlar to&apos;lov paytida aynan shu karta va yo&apos;riqnomani ko&apos;rishadi.
+                </p>
+              </div>
+              <button onClick={() => setShowMethodModal(false)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveMethod} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-semibold mb-1 block">To&apos;lov Tizimi (Provider) *</label>
+                  <select
+                    value={methodFormData.provider}
+                    onChange={(e) => {
+                      const prov = e.target.value;
+                      let defaultName = methodFormData.name;
+                      if (!editingMethod) {
+                        if (prov === 'click') defaultName = 'Click orqali to\'lov';
+                        else if (prov === 'payme') defaultName = 'Payme orqali to\'lov';
+                        else if (prov === 'card') defaultName = 'Bank Plastik Karta (Uzcard / Humo)';
+                        else if (prov === 'uzum') defaultName = 'Uzum Bank orqali to\'lov';
+                      }
+                      setMethodFormData({ ...methodFormData, provider: prov, name: defaultName });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="click">Click</option>
+                    <option value="payme">Payme</option>
+                    <option value="card">Bank Plastik Karta (Uzcard / Humo)</option>
+                    <option value="uzum">Uzum Bank</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-300 font-semibold mb-1 block">Ko&apos;rinadigan Nomi *</label>
+                  <input
+                    required
+                    value={methodFormData.name}
+                    onChange={(e) => setMethodFormData({ ...methodFormData, name: e.target.value })}
+                    placeholder="Masalan: Click orqali to'lov"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold mb-1 block">Plastik Karta Raqami (16 xonali) *</label>
+                <input
+                  required
+                  value={methodFormData.card_number}
+                  onChange={(e) => setMethodFormData({ ...methodFormData, card_number: e.target.value })}
+                  placeholder="8600 1234 5678 9012 yoki 9860..."
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono focus:outline-none focus:border-purple-500"
+                />
+                <span className="text-[10px] text-slate-500 mt-1 block">Pul to&apos;g&apos;ridan-to&apos;g&apos;ri shu plastik kartaga o&apos;tkaziladi.</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-semibold mb-1 block">Karta Egasi (Ism Familiya) *</label>
+                  <input
+                    required
+                    value={methodFormData.card_holder}
+                    onChange={(e) => setMethodFormData({ ...methodFormData, card_holder: e.target.value })}
+                    placeholder="OTABEK M."
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white uppercase focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-semibold mb-1 block">Bank Nomi</label>
+                  <input
+                    value={methodFormData.bank_name}
+                    onChange={(e) => setMethodFormData({ ...methodFormData, bank_name: e.target.value })}
+                    placeholder="TBC Bank, Kapitalbank, Agrobank..."
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 font-semibold mb-1 block">Telefon Raqami (Ixtiyoriy)</label>
+                  <input
+                    value={methodFormData.phone_number}
+                    onChange={(e) => setMethodFormData({ ...methodFormData, phone_number: e.target.value })}
+                    placeholder="+998 90 123 45 67"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-300 font-semibold mb-1 block">Tartib Raqami</label>
+                  <input
+                    type="number"
+                    value={methodFormData.display_order}
+                    onChange={(e) => setMethodFormData({ ...methodFormData, display_order: parseInt(e.target.value) || 0 })}
+                    placeholder="1"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold mb-1 block">To&apos;lov Ko&apos;rsatmasi (Mijozga ko&apos;rinadi)</label>
+                <textarea
+                  rows={2}
+                  value={methodFormData.instructions}
+                  onChange={(e) => setMethodFormData({ ...methodFormData, instructions: e.target.value })}
+                  placeholder="Ko'rsatilgan kartaga to'lov qiling va chekni yuboring..."
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="method_is_active"
+                  checked={methodFormData.is_active}
+                  onChange={(e) => setMethodFormData({ ...methodFormData, is_active: e.target.checked })}
+                  className="rounded bg-slate-900 border-slate-700 text-purple-600 focus:ring-purple-500"
+                />
+                <label htmlFor="method_is_active" className="text-slate-300 font-semibold cursor-pointer">
+                  To&apos;lov usuli faol bo&apos;lsin (mijozlarga ko&apos;rinsin)
+                </label>
+              </div>
+
+              <div className="flex gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowMethodModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading === 'save_method'}
+                  className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {actionLoading === 'save_method' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  <span>{editingMethod ? "O'zgarishlarni Saqlash" : "Qo'shish"}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

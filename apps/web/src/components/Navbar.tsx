@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Store, Bell, Search, User, LogOut, MessageSquare, AlertTriangle,
   ShoppingBag, ShoppingCart, Users, Settings, ChevronDown, X, CheckCheck,
-  Loader2, PackageOpen, LayoutDashboard, Sparkles
+  Loader2, PackageOpen, LayoutDashboard, Sparkles, Menu
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -147,7 +147,15 @@ export default function Navbar() {
   return (
         <header className="sticky top-0 z-40 w-full h-16 border-b border-slate-800/60 bg-[#0a0d14]/80 backdrop-blur-xl px-6 flex items-center justify-between">
       {/* Left: brand + quick nav */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Hamburger for mobile */}
+        <button
+          onClick={() => window.dispatchEvent(new Event('toggle-mobile-sidebar'))}
+          className="md:hidden p-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+          title="Menyu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
         <Link href="/dashboard" className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/50 transition-colors group">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
             <Store className="w-4 h-4 text-white" />
@@ -155,13 +163,13 @@ export default function Navbar() {
           <span className="font-semibold text-sm">ProSales</span>
           <span className="text-xs text-emerald-400 bg-emerald-500/10 px-1.5 py-0.25 rounded-full">Beta</span>
         </Link>
-        <Link href="/dashboard/products" className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors" title="Mahsulotlar">
+        <Link href="/dashboard/products" className="hidden sm:block p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors" title="Mahsulotlar">
           <ShoppingBag className="w-4 h-4" />
         </Link>
-        <Link href="/dashboard/orders" className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors" title="Buyurtmalar">
+        <Link href="/dashboard/orders" className="hidden sm:block p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors" title="Buyurtmalar">
           <ShoppingCart className="w-4 h-4" />
         </Link>
-        <Link href="/dashboard/customers" className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors" title="Mijdorlar">
+        <Link href="/dashboard/customers" className="hidden sm:block p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors" title="Mijdorlar">
           <Users className="w-4 h-4" />
         </Link>
       </div>

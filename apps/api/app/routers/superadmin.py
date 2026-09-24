@@ -9,9 +9,10 @@ from app.database import get_db
 from app.models import (
     Organization, User, Order, TelegramBot, OrderStatusEnum, Membership, RoleEnum,
     AISettings, Plan, Subscription, SubscriptionStatusEnum, Product, Customer,
-    Conversation, Message, OrderItem, PaymentRequest, PaymentRequestStatusEnum
+    Conversation, Message, OrderItem, PaymentRequest, PaymentRequestStatusEnum,
+    PaymentMethod
 )
-from app.schemas import StandardResponse
+from app.schemas import StandardResponse, PaymentMethodCreate, PaymentMethodUpdate
 from app.dependencies import get_current_user
 from app.config import settings
 from app.security import get_password_hash
@@ -934,6 +935,214 @@ async def delete_business(
         success=True,
         data={"message": f"'{org_name}' biznesi va unga tegishli barcha ma'lumotlar butunlay o'chirildi."}
     )
+
+
+# ============================================================================
+# TO'LOV USULLARI BOSHQARUVI (PAYMENT METHODS MANAGEMENT)
+# ============================================================================
+
+@router.get("/payment-methods", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def list_payment_methods(db: AsyncSession = Depends(get_db)):
+    """Barcha to'lov usullari (faol va nofaol) ro'yxatini qaytaradi."""
+    res = await db.execute(select(PaymentMethod).order_by(PaymentMethod.display_order.asc(), PaymentMethod.created_at.asc()))
+    methods = res.scalars().all()
+
+    if not methods:
+        default_methods = [
+            PaymentMethod(
+                name="Click",
+                provider="click",
+                card_number=settings.PAYMENT_CARD_NUMBER,
+                card_holder=settings.PAYMENT_CARD_HOLDER,
+                bank_name=settings.PAYMENT_CARD_BANK,
+                instructions="Click ilovasida 'Kartaga o'tkazish' bo'limiga kiring, kartani kiriting va to'lang.",
+                display_order=1,
+                is_active=True
+            ),
+            PaymentMethod(
+                name="Payme",
+                provider="payme",
+                card_number=settings.PAYMENT_CARD_NUMBER,
+                card_holder=settings.PAYMENT_CARD_HOLDER,
+                bank_name=settings.PAYMENT_CARD_BANK,
+                instructions="Payme ilovasida 'O'tkazmalar' bo'limi orqali ko'rsatilgan kartaga to'lov qiling.",
+                display_order=2,
+                is_active=True
+            ),
+            PaymentMethod(
+                name="Bank Plastik Karta (Uzcard / Humo)",
+                provider="card",
+                card_number=settings.PAYMENT_CARD_NUMBER,
+                card_holder=settings.PAYMENT_CARD_HOLDER,
+                bank_name=settings.PAYMENT_CARD_BANK,
+                instructions="Istalgan bank mobil ilovasi orqali ko'rsatilgan kartaga to'lov qiling.",
+                display_order=3,
+                is_active=True
+            ),
+            PaymentMethod(
+                name="Uzum Bank",
+                provider="uzum",
+                card_number=settings.PAYMENT_CARD_NUMBER,
+                card_holder=settings.PAYMENT_CARD_HOLDER,
+                bank_name=settings.PAYMENT_CARD_BANK,
+                instructions="Uzum Bank ilovasida kartaga 0% komissiya bilan to'lang.",
+                display_order=4,
+                is_active=True
+            ),
+        ]
+        db.add_all(default_methods)
+        await db.commit()
+        methods = default_methods
+
+    return StandardResponse(
+        success=True,
+        data=[
+            {
+                "id": str(m.id),
+                "name": m.name,
+                "provider": m.provider,
+                "card_number": m.card_number,
+                "card_holder": m.card_holder,
+                "bank_name": m.bank_name,
+                "phone_number": m.phone_number,
+                "deep_link": m.deep_link,
+                "instructions": m.instructions,
+                "is_active": m.is_active,
+                "display_order": m.display_order,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+                "updated_at": m.updated_at.isoformat() if m.updated_at else None
+            }
+            for m in methods
+        ]
+    )
+
+
+@router.post("/payment-methods", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def create_payment_method(data: PaymentMethodCreate, db: AsyncSession = Depends(get_db)):
+    """Yangi to'lov usuli qo'shish."""
+    method = PaymentMethod(
+        name=data.name.strip(),
+        provider=data.provider.strip().lower(),
+        card_number=data.card_number.strip(),
+        card_holder=data.card_holder.strip(),
+        bank_name=data.bank_name.strip() if data.bank_name else None,
+        phone_number=data.phone_number.strip() if data.phone_number else None,
+        deep_link=data.deep_link.strip() if data.deep_link else None,
+        instructions=data.instructions.strip() if data.instructions else None,
+        is_active=data.is_active,
+        display_order=data.display_order
+    )
+    db.add(method)
+    await db.commit()
+    await db.refresh(method)
+
+    return StandardResponse(
+        success=True,
+        data={
+            "id": str(method.id),
+            "name": method.name,
+            "provider": method.provider,
+            "message": f"'{method.name}' to'lov usuli muvaffaqiyatli qo'shildi!"
+        }
+    )
+
+
+@router.put("/payment-methods/{method_id}", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def update_payment_method(method_id: str, data: PaymentMethodUpdate, db: AsyncSession = Depends(get_db)):
+    """Mavjud to'lov usulini tahrirlash."""
+    import uuid as _uuid
+    try:
+        m_uuid = _uuid.UUID(method_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Noto'g'ri to'lov usuli ID si")
+
+    res = await db.execute(select(PaymentMethod).where(PaymentMethod.id == m_uuid))
+    method = res.scalars().first()
+    if not method:
+        raise HTTPException(status_code=404, detail="To'lov usuli topilmadi")
+
+    if data.name is not None:
+        method.name = data.name.strip()
+    if data.provider is not None:
+        method.provider = data.provider.strip().lower()
+    if data.card_number is not None:
+        method.card_number = data.card_number.strip()
+    if data.card_holder is not None:
+        method.card_holder = data.card_holder.strip()
+    if data.bank_name is not None:
+        method.bank_name = data.bank_name.strip() if data.bank_name else None
+    if data.phone_number is not None:
+        method.phone_number = data.phone_number.strip() if data.phone_number else None
+    if data.deep_link is not None:
+        method.deep_link = data.deep_link.strip() if data.deep_link else None
+    if data.instructions is not None:
+        method.instructions = data.instructions.strip() if data.instructions else None
+    if data.is_active is not None:
+        method.is_active = data.is_active
+    if data.display_order is not None:
+        method.display_order = data.display_order
+
+    method.updated_at = datetime.utcnow()
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data={"message": f"'{method.name}' to'lov usuli yangilandi."}
+    )
+
+
+@router.post("/payment-methods/{method_id}/toggle", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def toggle_payment_method(method_id: str, db: AsyncSession = Depends(get_db)):
+    """To'lov usulini faollashtirish yoki o'chirish."""
+    import uuid as _uuid
+    try:
+        m_uuid = _uuid.UUID(method_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Noto'g'ri to'lov usuli ID si")
+
+    res = await db.execute(select(PaymentMethod).where(PaymentMethod.id == m_uuid))
+    method = res.scalars().first()
+    if not method:
+        raise HTTPException(status_code=404, detail="To'lov usuli topilmadi")
+
+    method.is_active = not method.is_active
+    method.updated_at = datetime.utcnow()
+    await db.commit()
+
+    status_str = "faollashtirildi" if method.is_active else "o'chirildi"
+    return StandardResponse(
+        success=True,
+        data={
+            "id": str(method.id),
+            "is_active": method.is_active,
+            "message": f"'{method.name}' to'lov usuli {status_str}."
+        }
+    )
+
+
+@router.delete("/payment-methods/{method_id}", response_model=StandardResponse, dependencies=[Depends(verify_superadmin)])
+async def delete_payment_method(method_id: str, db: AsyncSession = Depends(get_db)):
+    """To'lov usulini o'chirish."""
+    import uuid as _uuid
+    try:
+        m_uuid = _uuid.UUID(method_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Noto'g'ri to'lov usuli ID si")
+
+    res = await db.execute(select(PaymentMethod).where(PaymentMethod.id == m_uuid))
+    method = res.scalars().first()
+    if not method:
+        raise HTTPException(status_code=404, detail="To'lov usuli topilmadi")
+
+    name = method.name
+    await db.delete(method)
+    await db.commit()
+
+    return StandardResponse(
+        success=True,
+        data={"message": f"'{name}' to'lov usuli butunlay o'chirildi."}
+    )
+
 
 
 

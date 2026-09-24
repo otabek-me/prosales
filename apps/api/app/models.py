@@ -409,3 +409,21 @@ class AuditLog(Base):
     resource_id = Column(String(100), nullable=True)
     details_json = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PaymentMethod(Base):
+    __tablename__ = "payment_methods"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False)  # "Click", "Payme", "Bank Plastik Karta (Uzcard / Humo)", "Uzum Bank"
+    provider = Column(String(50), nullable=False, default="card")  # "click", "payme", "card", "uzum"
+    card_number = Column(String(50), nullable=False)
+    card_holder = Column(String(100), nullable=False)
+    bank_name = Column(String(100), nullable=True)
+    phone_number = Column(String(50), nullable=True)
+    deep_link = Column(String(500), nullable=True)
+    instructions = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    display_order = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

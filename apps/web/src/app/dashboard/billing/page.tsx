@@ -21,6 +21,7 @@ export default function BillingPage() {
   const [copied, setCopied] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [selectedMethod, setSelectedMethod] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -30,10 +31,10 @@ export default function BillingPage() {
     try {
       setLoading(true);
       const [plansRes, subRes, payInfoRes, myPaysRes] = await Promise.all([
-        apiGet('/subscriptions/plans'),
-        apiGet('/subscriptions/current'),
-        apiGet('/subscriptions/payment-info'),
-        apiGet('/subscriptions/my-payments'),
+        apiGet('/subscriptions/plans').catch(() => ({ data: [] })),
+        apiGet('/subscriptions/current').catch(() => ({ data: null })),
+        apiGet('/subscriptions/payment-info').catch(() => ({ data: null })),
+        apiGet('/subscriptions/my-payments').catch(() => ({ data: [] })),
       ]);
       setPlans(plansRes.data || []);
       setCurrentSub(subRes.data || null);
@@ -47,8 +48,9 @@ export default function BillingPage() {
   };
 
   const copyCard = () => {
-    if (!paymentInfo?.card_number) return;
-    navigator.clipboard.writeText(paymentInfo.card_number.replace(/\s+/g, ''));
+    const num = selectedMethod?.card_number || paymentInfo?.card_number;
+    if (!num) return;
+    navigator.clipboard.writeText(num.replace(/\s+/g, ''));
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
@@ -379,113 +381,244 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Bank Card Payment Modal */}
-      {selectedPlan && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-lg glass-panel rounded-2xl p-6 border border-indigo-500/40 shadow-2xl space-y-5">
-            <div className="flex justify-between items-start border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-lg font-bold text-white">
-                  {currentSub?.plan?.id === selectedPlan.id || currentSub?.plan?.slug === selectedPlan.slug
-                    ? "Tarifni Uzaytirish / To'lov Qilish"
-                    : "To'lov va Obunani Faollashtirish"}
-                </h3>
-                <p className="text-xs text-indigo-400 font-semibold mt-0.5">
-                  Tarif: {selectedPlan.name} ({Number(selectedPlan.price_monthly || 0).toLocaleString()} UZS / oy)
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedPlan(null)}
-                className="text-slate-400 hover:text-white text-sm"
-              >
-                ✕
-              </button>
-            </div>
+      {/* Professional Multi-Method Payment Modal */}
+      {selectedPlan && (() => {
+        const methods = paymentInfo?.payment_methods || [];
+        const activeMethod = selectedMethod || methods[0] || null;
+        const providerColors: Record<string, { gradient: string; bg: string; text: string; border: string }> = {
+          click: { gradient: 'from-blue-500 to-sky-500', bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/40' },
+          payme: { gradient: 'from-cyan-500 to-teal-500', bg: 'bg-cyan-500/15', text: 'text-cyan-400', border: 'border-cyan-500/40' },
+          card: { gradient: 'from-indigo-500 to-purple-500', bg: 'bg-indigo-500/15', text: 'text-indigo-400', border: 'border-indigo-500/40' },
+          uzum: { gradient: 'from-emerald-500 to-green-500', bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/40' },
+        };
+        const getColors = (p: string) => providerColors[p] || providerColors.card;
 
-            {/* Bank Card Details Box */}
-            <div className="p-4 rounded-xl bg-gradient-to-tr from-indigo-900/60 to-purple-900/60 border border-indigo-500/40 shadow-inner space-y-3">
-              <div className="flex justify-between items-center text-xs text-indigo-300">
-                <span>Bank: <b>{paymentInfo?.bank_name || 'Humo / Uzcard'}</b></span>
-                <span>Summa: <b>{Number(selectedPlan.price_monthly || 0).toLocaleString()} UZS</b></span>
-              </div>
-
-              <div>
-                <span className="text-[11px] text-slate-300 block mb-1">Karta raqami:</span>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-indigo-500/30">
-                  <span className="text-base sm:text-lg font-mono font-bold text-white tracking-widest">
-                    {paymentInfo?.card_number || '9860 3501 2345 6789'}
-                  </span>
+        return (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+            <div className="w-full max-w-lg max-h-[95vh] overflow-y-auto glass-panel rounded-2xl border border-indigo-500/30 shadow-2xl shadow-black/60">
+              {/* Header */}
+              <div className="p-4 sm:p-5 border-b border-slate-800">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-white">
+                      {currentSub?.plan?.id === selectedPlan.id || currentSub?.plan?.slug === selectedPlan.slug
+                        ? "Tarifni Uzaytirish"
+                        : "To'lov va Obunani Faollashtirish"}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-slate-400">Tarif:</span>
+                      <span className="text-xs font-bold text-indigo-300">{selectedPlan.name}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
+                        {Number(selectedPlan.price_monthly || 0).toLocaleString()} UZS / oy
+                      </span>
+                    </div>
+                  </div>
                   <button
-                    type="button"
-                    onClick={copyCard}
-                    className="p-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs flex items-center gap-1 transition-colors"
+                    onClick={() => { setSelectedPlan(null); setSelectedMethod(null); }}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                   >
-                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copied ? 'Nusxalandi' : 'Nusxa'}</span>
+                    ✕
                   </button>
                 </div>
               </div>
 
-              <div className="flex justify-between text-xs text-slate-300">
-                <span>Karta egasi:</span>
-                <span className="font-semibold text-white">{paymentInfo?.card_holder || 'OTABEK R.'}</span>
+              <div className="p-4 sm:p-5 space-y-4">
+                {/* Payment Methods Tabs */}
+                {methods.length > 0 && (
+                  <div>
+                    <p className="text-[11px] text-slate-400 font-semibold mb-2 uppercase tracking-wider">To&apos;lov Usulini Tanlang</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {methods.map((m: any) => {
+                        const colors = getColors(m.provider);
+                        const isActive = activeMethod?.id === m.id;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => setSelectedMethod(m)}
+                            className={`relative p-2.5 rounded-xl border-2 transition-all text-center ${
+                              isActive
+                                ? `${colors.border} ${colors.bg} shadow-lg`
+                                : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-800/50'
+                            }`}
+                          >
+                            {isActive && (
+                              <span className="absolute top-1.5 right-1.5">
+                                <CheckCircle2 className={`w-3.5 h-3.5 ${colors.text}`} />
+                              </span>
+                            )}
+                            <div className={`w-8 h-8 rounded-lg bg-gradient-to-tr ${colors.gradient} flex items-center justify-center mx-auto mb-1.5`}>
+                              <CreditCard className="w-4 h-4 text-white" />
+                            </div>
+                            <span className={`text-[11px] font-bold block truncate ${isActive ? 'text-white' : 'text-slate-400'}`}>
+                              {m.name?.split(' ')[0] || m.provider}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected Method Card Details */}
+                {activeMethod ? (
+                  <div className={`p-4 rounded-xl bg-gradient-to-br ${getColors(activeMethod.provider).bg} border ${getColors(activeMethod.provider).border} space-y-3`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-7 h-7 rounded-lg bg-gradient-to-tr ${getColors(activeMethod.provider).gradient} flex items-center justify-center`}>
+                          <CreditCard className="w-3.5 h-3.5 text-white" />
+                        </div>
+                        <span className="text-sm font-bold text-white">{activeMethod.name}</span>
+                      </div>
+                      <span className="text-sm font-black text-emerald-400">
+                        {Number(selectedPlan.price_monthly || 0).toLocaleString()} UZS
+                      </span>
+                    </div>
+
+                    {/* Card Number */}
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Karta Raqami</span>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-slate-700/50">
+                        <span className="text-base sm:text-lg font-mono font-bold text-white tracking-widest">
+                          {activeMethod.card_number}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={copyCard}
+                          className="p-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs flex items-center gap-1 transition-colors flex-shrink-0 ml-2"
+                        >
+                          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span className="hidden sm:inline">{copied ? 'Nusxalandi' : 'Nusxa'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Card Holder & Bank */}
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <span className="text-slate-400 block">Karta egasi</span>
+                        <span className="font-semibold text-white">{activeMethod.card_holder}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block">Bank</span>
+                        <span className="font-semibold text-white">{activeMethod.bank_name || '—'}</span>
+                      </div>
+                    </div>
+
+                    {/* Instructions */}
+                    {activeMethod.instructions && (
+                      <div className="p-2.5 rounded-lg bg-black/20 border border-slate-700/30">
+                        <p className="text-[11px] text-slate-300 leading-relaxed">
+                          <span className="text-indigo-400 font-bold">📋 Ko&apos;rsatma: </span>
+                          {activeMethod.instructions}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Trust Badge */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      <span className="text-[10px] text-emerald-400 font-semibold">Xavfsiz va ishonchli to&apos;lov tizimi • Ma&apos;lumotlaringiz himoyalangan</span>
+                    </div>
+                  </div>
+                ) : (
+                  /* Fallback when no methods from DB — show .env based info */
+                  <div className="p-4 rounded-xl bg-gradient-to-tr from-indigo-900/60 to-purple-900/60 border border-indigo-500/40 shadow-inner space-y-3">
+                    <div className="flex justify-between items-center text-xs text-indigo-300">
+                      <span>Bank: <b>{paymentInfo?.bank_name || 'Humo / Uzcard'}</b></span>
+                      <span>Summa: <b>{Number(selectedPlan.price_monthly || 0).toLocaleString()} UZS</b></span>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-slate-300 block mb-1">Karta raqami:</span>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-indigo-500/30">
+                        <span className="text-base sm:text-lg font-mono font-bold text-white tracking-widest">
+                          {paymentInfo?.card_number || '9860 **** **** ****'}
+                        </span>
+                        <button type="button" onClick={copyCard} className="p-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs flex items-center gap-1 transition-colors">
+                          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copied ? 'Nusxalandi' : 'Nusxa'}</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-300">
+                      <span>Karta egasi:</span>
+                      <span className="font-semibold text-white">{paymentInfo?.card_holder || '—'}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Payment Submit Form */}
+                <form onSubmit={handlePaySubmit} className="space-y-3 text-xs">
+                  <div className="pt-1 border-t border-slate-800">
+                    <p className="text-[11px] text-slate-400 font-semibold mb-3 uppercase tracking-wider mt-2">Chek Ma&apos;lumotlari</p>
+                  </div>
+                  <div>
+                    <label className="text-slate-300 font-semibold mb-1 block">To&apos;lovchi Ismi va Familiyasi *</label>
+                    <input
+                      required
+                      value={senderName}
+                      onChange={(e) => setSenderName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white focus:outline-none focus:border-indigo-500 text-sm"
+                      placeholder="Masalan: Otabek Rahmiddinov"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-slate-300 font-semibold mb-1 block">Telefon raqamingiz</label>
+                      <input
+                        value={senderPhone}
+                        onChange={(e) => setSenderPhone(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white focus:outline-none focus:border-indigo-500 text-sm"
+                        placeholder="+998 90 123 45 67"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-300 font-semibold mb-1 block">Tranzaksiya kodi / Chek</label>
+                      <input
+                        value={transactionId}
+                        onChange={(e) => setTransactionId(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white focus:outline-none focus:border-indigo-500 text-sm"
+                        placeholder="Chek raqami yoki xabar"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-3 flex gap-3">
+                    <button
+                      type="submit"
+                      disabled={submitting || !senderName.trim()}
+                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 disabled:opacity-50"
+                    >
+                      {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                      To&apos;lovni tasdiqlash uchun yuborish
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedPlan(null); setSelectedMethod(null); }}
+                      className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs"
+                    >
+                      Bekor qilish
+                    </button>
+                  </div>
+                </form>
+
+                {/* Error / Success */}
+                {errorMsg && (
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" /> {errorMsg}
+                  </div>
+                )}
+                {successMsg && (
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> {successMsg}
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Payment Submit Form */}
-            <form onSubmit={handlePaySubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-300 font-semibold mb-1 block">To&apos;lovchi Ismi va Familiyasi *</label>
-                <input
-                  required
-                  value={senderName}
-                  onChange={(e) => setSenderName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white focus:outline-none focus:border-indigo-500"
-                  placeholder="Masalan: Otabek Rahmiddinov"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-300 font-semibold mb-1 block">Telefon raqamingiz</label>
-                <input
-                  value={senderPhone}
-                  onChange={(e) => setSenderPhone(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white focus:outline-none focus:border-indigo-500"
-                  placeholder="+998 90 123 45 67"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-300 font-semibold mb-1 block">Tranzaksiya kodi yoki Chek izohi</label>
-                <input
-                  value={transactionId}
-                  onChange={(e) => setTransactionId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700 text-white focus:outline-none focus:border-indigo-500"
-                  placeholder="Payme/Click chek raqami yoki xabar"
-                />
-              </div>
-
-              <div className="pt-2 flex gap-3">
-                <button
-                  type="submit"
-                  disabled={submitting || !senderName.trim()}
-                  className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 disabled:opacity-50"
-                >
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                  To&apos;lovni tasdiqlash uchun yuborish
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlan(null)}
-                  className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs"
-                >
-                  Bekor qilish
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

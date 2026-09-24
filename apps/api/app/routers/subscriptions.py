@@ -10,7 +10,8 @@ from app.database import get_db
 from app.config import settings
 from app.models import (
     Plan, Subscription, SubscriptionStatusEnum, PaymentRequest,
-    PaymentRequestStatusEnum, Organization, Product, Conversation, Customer
+    PaymentRequestStatusEnum, Organization, Product, Conversation, Customer,
+    PaymentMethod
 )
 from app.schemas import StandardResponse
 from app.dependencies import get_current_organization_id, get_current_user
@@ -166,16 +167,90 @@ async def list_plans(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/payment-info", response_model=StandardResponse)
-async def get_payment_info():
-    """To'lov qilish uchun bank kartasi ma'lumotlarini .env dan olib beradi."""
+async def get_payment_info(db: AsyncSession = Depends(get_db)):
+    """To'lov qilish uchun bank kartasi va to'lov usullari (Click, Payme, Uzcard/Humo) ma'lumotlarini beradi."""
+    methods_res = await db.execute(
+        select(PaymentMethod)
+        .where(PaymentMethod.is_active == True)
+        .order_by(PaymentMethod.display_order.asc(), PaymentMethod.created_at.asc())
+    )
+    methods = methods_res.scalars().all()
+
+    # Bazada to'lov usullari bo'lmasa, .env dagi parametrlar asosida standartlarni yaratamiz
+    if not methods:
+        default_methods = [
+            PaymentMethod(
+                name="Click",
+                provider="click",
+                card_number=settings.PAYMENT_CARD_NUMBER,
+                card_holder=settings.PAYMENT_CARD_HOLDER,
+                bank_name=settings.PAYMENT_CARD_BANK,
+                instructions="Click ilovasida 'Kartaga o'tkazish' bo'limiga kiring, kartani kiriting va to'lang.",
+                display_order=1,
+                is_active=True
+            ),
+            PaymentMethod(
+                name="Payme",
+                provider="payme",
+                card_number=settings.PAYMENT_CARD_NUMBER,
+                card_holder=settings.PAYMENT_CARD_HOLDER,
+                bank_name=settings.PAYMENT_CARD_BANK,
+                instructions="Payme ilovasida 'O'tkazmalar' bo'limi orqali ko'rsatilgan kartaga to'lov qiling.",
+                display_order=2,
+                is_active=True
+            ),
+            PaymentMethod(
+                name="Bank Plastik Karta (Uzcard / Humo)",
+                provider="card",
+                card_number=settings.PAYMENT_CARD_NUMBER,
+                card_holder=settings.PAYMENT_CARD_HOLDER,
+                bank_name=settings.PAYMENT_CARD_BANK,
+                instructions="Istalgan bank mobil ilovasi orqali ko'rsatilgan kartaga to'lov qiling.",
+                display_order=3,
+                is_active=True
+            ),
+            PaymentMethod(
+                name="Uzum Bank",
+                provider="uzum",
+                card_number=settings.PAYMENT_CARD_NUMBER,
+                card_holder=settings.PAYMENT_CARD_HOLDER,
+                bank_name=settings.PAYMENT_CARD_BANK,
+                instructions="Uzum Bank ilovasida kartaga 0% komissiya bilan to'lang.",
+                display_order=4,
+                is_active=True
+            ),
+        ]
+        db.add_all(default_methods)
+        await db.commit()
+        methods = default_methods
+
+    method_list = [
+        {
+            "id": str(m.id),
+            "name": m.name,
+            "provider": m.provider,
+            "card_number": m.card_number,
+            "card_holder": m.card_holder,
+            "bank_name": m.bank_name,
+            "phone_number": m.phone_number,
+            "deep_link": m.deep_link,
+            "instructions": m.instructions,
+            "display_order": m.display_order
+        }
+        for m in methods
+    ]
+
+    primary = methods[0] if methods else None
+
     return StandardResponse(
         success=True,
         data={
-            "card_number": settings.PAYMENT_CARD_NUMBER,
-            "card_holder": settings.PAYMENT_CARD_HOLDER,
-            "bank_name": settings.PAYMENT_CARD_BANK,
+            "card_number": primary.card_number if primary else settings.PAYMENT_CARD_NUMBER,
+            "card_holder": primary.card_holder if primary else settings.PAYMENT_CARD_HOLDER,
+            "bank_name": primary.bank_name if primary else settings.PAYMENT_CARD_BANK,
             "currency": "UZS",
-            "instructions": "Ko'rsatilgan bank kartasiga tarif summasini o'tkazing va chek / to'lovchi ismini pastdagi shaklga kiriting. Operator tekshirib obunani darhol faollashtiradi."
+            "instructions": primary.instructions if primary else "Ko'rsatilgan bank kartasiga tarif summasini o'tkazing va chek ma'lumotlarini kiriting.",
+            "payment_methods": method_list
         }
     )
 
@@ -217,6 +292,7 @@ async def get_current_subscription(
     current_products_count = len(prod_count_res.scalars().all())
 
     conv_count_res = await db.execute(select(Conversation).where(Conversation.organization_id == org_id))
+    current_conv_count = len(conv_count_res.scalars().all())
     org_res = await db.execute(select(Organization).where(Organization.id == org_id))
     org = org_res.scalars().first()
     is_org_active = org.is_active if org else True

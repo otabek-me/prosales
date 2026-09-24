@@ -302,3 +302,49 @@ class DashboardStatsResponse(BaseModel):
     ai_handled_rate: float
     recent_orders: List[OrderResponse]
     sales_funnel: Dict[str, int]
+
+
+# Payment Method Schemas (SuperAdmin config & Public checkout)
+class PaymentMethodCreate(BaseModel):
+    name: str
+    provider: str = "card"  # "click", "payme", "card", "uzum"
+    card_number: str
+    card_holder: str
+    bank_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    deep_link: Optional[str] = None
+    instructions: Optional[str] = None
+    is_active: bool = True
+    display_order: int = 0
+
+
+class PaymentMethodUpdate(BaseModel):
+    name: Optional[str] = None
+    provider: Optional[str] = None
+    card_number: Optional[str] = None
+    card_holder: Optional[str] = None
+    bank_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    deep_link: Optional[str] = None
+    instructions: Optional[str] = None
+    is_active: Optional[bool] = None
+    display_order: Optional[int] = None
+
+
+class PaymentMethodResponse(BaseModel):
+    id: UUID
+    name: str
+    provider: str
+    card_number: str
+    card_holder: str
+    bank_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    deep_link: Optional[str] = None
+    instructions: Optional[str] = None
+    is_active: bool
+    display_order: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
